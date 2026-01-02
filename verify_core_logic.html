@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Dynamic Logic Verification 🧠</title>
+    <style>
+        body {
+            background: #121212;
+            color: #e0e0e0;
+            font-family: monospace;
+            padding: 20px;
+        }
+
+        .pass {
+            color: #00E676;
+            font-weight: bold;
+        }
+
+        .fail {
+            color: #FF1744;
+            font-weight: bold;
+        }
+
+        .info {
+            color: #2979FF;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🧠 Dynamic Logic Verification</h1>
+    <div id="output">Running Tests...</div>
+
+    <!-- Mocks -->
+    <div style="display:none">
+        <div id="bot-logs"></div>
+        <div id="bot-status-indicator"></div>
+        <div id="bot-balance"></div>
+        <div id="bot-pnl"></div>
+        <div id="bot-indicators"></div>
+        <div id="btn-bot-toggle"></div>
+    </div>
+    <script>
+        window.localStorage = { getItem: (k) => null, setItem: (k, v) => { } };
+        window.ChartManager = { addMarker: () => { } };
+        window.SoundFX = { playBuy: () => { }, playSell: () => { } };
+    </script>
+
+    <!-- Load Bot -->
+    <script src="bot.js"></script>
+
+    <script>
+        const out = document.getElementById('output');
+        function log(msg, type = 'INFO') {
+            const div = document.createElement('div');
+            div.className = type.toLowerCase();
+            div.innerText = msg;
+            out.appendChild(div);
+        }
+
+        setTimeout(() => {
+            log("--- TEST 1: REGIME DETECTION (TRENDING) ---");
+            // Generate Strong Trend Data (ADX > 25)
+            let candles = [];
+            let p = 50000;
+            for (let i = 0; i < 100; i++) {
+                p += 50;
+                candles.push({ time: i, open: p - 10, high: p + 20, low: p - 10, close: p, volume: 1000 });
+            }
+
+            const adx = Indicators.adx(candles, 14);
+            const adxVal = adx[adx.length - 1];
+            log(`Calculated ADX: ${adxVal.toFixed(1)} (Target > 25)`);
+
+            const bot = new TradingBot();
+            const regime = bot.detectRegime(adxVal, 50, 50);
+
+            if (regime === 'TRENDING') log("PASS: Bot identified TRENDING regime.", 'PASS');
+            else log(`FAIL: Bot sees ${regime}`, 'FAIL');
+
+
+            log("<br>--- TEST 2: AUTO-TUNING (The 'Smart' Check) ---");
+            // In Trending Regime, Bot should accept RSI 60
+            for (let i = 0; i < 5; i++) {
+                p -= 75;
+                candles.push({ time: 200 + i, open: p + 20, high: p + 20, low: p - 20, close: p, volume: 1000 });
+            }
+            p += 100;
+            candles.push({ time: 300, open: p - 50, high: p, low: p - 50, close: p, volume: 5000 });
+
+            const rsi = Indicators.rsi(candles, 14).pop();
+            const params = bot.getDynamicParams('TRENDING');
+            log(`Current RSI: ${rsi.toFixed(1)}`);
+            log(`Dynamic RSI Limit: ${params.rsiLimit}`);
+
+            if (rsi < params.rsiLimit && rsi > 45) {
+                log("PASS: Strategy allows Higher RSI (Smart Adaptation)", 'PASS');
+            } else {
+                log("FAIL: Logic error in Dynamic Params", 'FAIL');
+            }
+
+
+            log("<br>--- TEST 3: FULL EXECUTION (AUTO-SOLVER v2) ---");
+
+            // SOLVER v2: Iterates Trend, Pullback Slope, AND Pullback Length
+            let bestCandles = null;
+            let bestP = 0;
+            let found = false;
+            let closestMiss = { rsi: 999, macd: -999, t: 0, pS: 0, pL: 0 };
+
+            const trendSlopes = [20, 30, 40, 50, 60, 80, 100, 150, 200, 300];
+            const pullbackSlopes = [-2, -5, -8, -10, -15, -20, -30, -50, -80, -100];
+            const pullbackLengths = [4, 5, 6, 8, 10, 12, 15, 20];
+
+            let attempts = 0;
+
+            for (let tSlope of trendSlopes) {
+                if (found) break;
+                for (let pSlope of pullbackSlopes) {
+                    if (found) break;
+                    for (let pLen of pullbackLengths) {
+                        attempts++;
+
+                        // Generate Scenario
+                        let simCandles = [];
+                        let simP = 50000;
+
+                        // Trend (120 bars)
+                        for (let i = 0; i < 120; i++) {
+                            simP += tSlope;
+                            simCandles.push({ time: i, open: simP - 10, high: simP + 20, low: simP - 10, close: simP, volume: 1000 });
+                        }
+                        // Pullback (Variable Length)
+                        for (let i = 0; i < pLen; i++) {
+                            simP += pSlope;
+                            simCandles.push({ time: 200 + i, open: simP + 10, high: simP + 10, low: simP - 10, close: simP, volume: 1000 });
+                        }
+                        // Trigger BREAKOUT
+                        simP += (tSlope * 2);
+                        simCandles.push({ time: 300, open: simP - 20, high: simP, low: simP - 20, close: simP, volume: 5000 });
+
+                        // Check Metrics
+                        const ind = Indicators;
+                        const r = ind.rsi(simCandles, 14).pop();
+                        const mObj = ind.macd(simCandles);
+                        const m = mObj.histogram[mObj.histogram.length - 1];
+                        const e = ind.ema(simCandles, 50).pop();
+
+                        // Track "Best Miss" (Lowest RSI closest to 60)
+                        if (Math.abs(r - 60) < Math.abs(closestMiss.rsi - 60)) {
+                            closestMiss = { rsi: r, macd: m, t: tSlope, pS: pSlope, pL: pLen };
+                        }
+
+                        // CRITERIA: RSI < 64, MACD > 0, Price > EMA
+                        // We check for POSITIVE MACD ( > 0.01 to be safe)
+                        if (r < 64 && r > 40 && m > 0.01 && simP > e) {
+                            bestCandles = simCandles;
+                            bestP = simP;
+                            found = true;
+                            log(`SOLVER SUCCESS: Trend=${tSlope}, Pullback=${pSlope}, Len=${pLen} -> RSI:${r.toFixed(1)} MACD:${m.toFixed(2)}`, 'pass');
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!found) {
+                log(`SOLVER FAILED after ${attempts} attempts.`, 'FAIL');
+                log(`Closest Candidate: RSI=${closestMiss.rsi.toFixed(1)}, MACD=${closestMiss.macd.toFixed(2)} (T:${closestMiss.t}, PS:${closestMiss.pS}, L:${closestMiss.pL})`, 'info');
+                log("Bot refuses to trade because no mathematical scenario met criteria.", 'fail');
+            } else {
+                // Hook Bot Logs
+                bot.isRunning = true;
+                bot.log = (m, t) => log(`[BOT-${t}] ${m}`, 'INFO');
+
+                let tradeOpened = false;
+                const originalOpen = bot.openPosition.bind(bot);
+                bot.openPosition = (...args) => {
+                    tradeOpened = true;
+                    originalOpen(...args);
+                };
+
+                bot.processTick(bestCandles, bestP);
+
+                if (tradeOpened) log("PASS: Bot Triggered Trade!", 'PASS');
+                else log("FAIL: Bot refused trade despite Solver Match (Double check Logic).", 'FAIL');
+            }
+        }, 500);
+    </script>
+</body>
+
+</html>

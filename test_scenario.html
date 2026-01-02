@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>TradingBot QA Sanity Check 🧪</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: #e0e0e0;
+            font-family: monospace;
+            padding: 20px;
+        }
+
+        .pass {
+            color: #00C853;
+            font-weight: bold;
+        }
+
+        .fail {
+            color: #FF3D00;
+            font-weight: bold;
+        }
+
+        .info {
+            color: #2979FF;
+        }
+
+        .log-box {
+            background: #1e1e1e;
+            border: 1px solid #333;
+            padding: 15px;
+            margin-top: 10px;
+            height: 60vh;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        h1 {
+            border-bottom: 2px solid #555;
+            padding-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🤖 Bot Logic Sanity Check (Scenario Runner)</h1>
+    <p>Simulating "Perfect Long Setup": Trend (90 bars) -> Pullback (8 bars) -> Trigger (1 bar)</p>
+    <div id="verdict">Running...</div>
+    <div id="logs" class="log-box"></div>
+
+    <script>
+        // 1. MOCK ENVIRONMENT (The Sandbox) overrides globals before bot.js loads
+        const mockStorage = {};
+        const realLocalStorage = window.localStorage;
+
+        // Override localStorage to protect real user data
+        Object.defineProperty(window, 'localStorage', {
+            value: {
+                getItem: (key) => mockStorage[key] || null,
+                setItem: (key, val) => mockStorage[key] = val,
+                removeItem: (key) => delete mockStorage[key],
+                clear: () => { }
+            },
+            writable: true
+        });
+
+        // Mock UI elements required by bot.js
+        document.body.innerHTML += `
+            <div id="bot-logs" style="display:none"></div>
+            <div id="bot-status-indicator" style="display:none"></div>
+            <div id="bot-balance" style="display:none"></div>
+            <div id="bot-pnl" style="display:none"></div>
+            <div id="bot-indicators" style="display:none"></div>
+            <div id="btn-bot-toggle" style="display:none"></div>
+            <div id="btn-test-sound" style="display:none"></div>
+        `;
+
+        // Mock ChartManager
+        window.ChartManager = {
+            addMarker: (t, p, type, txt) => console.log(`[MOCK CHART] Marker: ${type} @ ${p} (${txt})`)
+        };
+    </script>
+
+    <!-- Load the actual Bot Logic -->
+    <script src="bot.js"></script>
+
+    <script>
+        const logBox = document.getElementById('logs');
+        const verdictBox = document.getElementById('verdict');
+
+        function log(msg, type = 'INFO') {
+            logBox.innerHTML += `<span class="${type.toLowerCase()}">[${type}] ${msg}</span>\n`;
+            console.log(`[${type}] ${msg}`);
+        }
+
+        function runSanityCheck() {
+            try {
+                log("Initializing Test Bot instance...", 'INFO');
+                const bot = new TradingBot();
+                bot.paperBalance = 10000; // Reset balance
+                bot.isRunning = true;
+
+                // 2. GENERATE PERFECT SCENARIO DATA
+                // We need > 105 candles for indicators to warm up
+                // Let's generate 150 candles total.
+                // 0-140: Strong Uptrend (building EMA/ADX)
+                // 141-149: Pullback
+                // 150: Trigger
+
+                let candles = [];
+                let price = 50000;
+
+                // Step 1: Trend Phase (0-140) - Perfect Linear Growth (+2.0)
+                // Result: RSI stabilizes high, ADX climbs.
+                for (let i = 0; i < 140; i++) {
+                    price += 2.0;
+                    candles.push({
+                        time: 1000 + i * 60,
+                        open: price - 1,
+                        high: price + 2,
+                        low: price - 2,
+                        close: price,
+                        volume: 1000
+                    });
+                }
+
+                log(`Generated 140 trend candles. Last Price: ${price}`, 'INFO');
+
+                // Step 2: Micro-Pullback (141-146) - Controlled Dip (-1.0) for 6 bars
+                // Result: Drops RSI to ~52, keeps MACD positive.
+                for (let i = 0; i < 6; i++) {
+                    price -= 1.0;
+                    candles.push({
+                        time: 2000 + i * 60,
+                        open: price + 1,
+                        high: price + 1,
+                        low: price - 1,
+                        close: price,
+                        volume: 800
+                    });
+                }
+
+                log(`Generated 6 pullback candles. Last Price: ${price}`, 'INFO');
+
+                // Step 3: The Trigger (147) - Breakout (+5.0)
+                price += 5.0;
+                candles.push({
+                    time: 3000,
+                    open: price - 4,
+                    high: price,
+                    low: price - 5,
+                    close: price,
+                    volume: 2000
+                });
+
+                log(`Generated Trigger Candle. Close: ${price}`, 'INFO');
+
+                // 3. EXECUTE
+                log("Processing Tick...", 'INFO');
+
+                // Hook into bot log to capture internal decision
+                const originalLog = bot.log;
+                let tradeOpened = false;
+                let logicInfo = "";
+
+                bot.log = (msg, type) => {
+                    log(`[BOT INTERNAL] ${msg}`, 'INFO');
+                    if (msg.includes("OPEN LONG")) tradeOpened = true;
+                    if (msg.includes("Detected")) logicInfo = msg;
+                };
+
+                bot.processTick(candles, price);
+
+                // 4. DIAGNOSTICS & VERDICT
+                // We calculate indicators manually to verify what the bot saw
+                const ema = Indicators.ema(candles, 50).pop();
+                const rsi = Indicators.rsi(candles, 14).pop();
+                const adx = Indicators.adx(candles, 14).pop();
+                const macd = Indicators.macd(candles).histogram.pop();
+
+                log(`\n--- DIAGNOSTICS ---`, 'INFO');
+                log(`EMA50: ${ema.toFixed(2)} (Price: ${price}) -> Trend OK? ${price > ema ? "YES" : "NO"}`, price > ema ? 'PASS' : 'FAIL');
+                log(`MACD Hist: ${macd.toFixed(2)} -> Positive? ${macd > 0 ? "YES" : "NO"}`, macd > 0 ? 'PASS' : 'FAIL');
+                log(`RSI: ${rsi.toFixed(2)} -> In Zone (<60)? ${rsi < 60 ? "YES" : "NO"}`, rsi < 60 ? 'PASS' : 'FAIL');
+                log(`ADX: ${adx.toFixed(2)} -> Regime likely TRENDING? ${adx > 25 ? "YES" : "NO"}`, adx > 25 ? 'PASS' : 'FAIL');
+
+                if (tradeOpened) {
+                    verdictBox.innerHTML = "<span class='pass'>PASSED: Bot executed TRADE as expected. ✅</span>";
+                    log("\nFINAL RESULT: SUCCESS - Trade Opened.", 'PASS');
+                } else {
+                    verdictBox.innerHTML = "<span class='fail'>FAILED: Bot did NOT trade. ❌</span>";
+                    log("\nFINAL RESULT: FAILURE - No Trade.", 'FAIL');
+                    log("Check logic parameters in bot.js vs calculated diagnostics above.", 'FAIL');
+                }
+
+            } catch (e) {
+                log(`CRITICAL ERROR: ${e.message}\n${e.stack}`, 'FAIL');
+            }
+        }
+
+        setTimeout(runSanityCheck, 500);
+    </script>
+</body>
+
+</html>

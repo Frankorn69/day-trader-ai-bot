@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Visual Strategy Debugger 👁️</title>
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        body {
+            background: #121212;
+            color: #eee;
+            font-family: sans-serif;
+            display: flex;
+            height: 100vh;
+            margin: 0;
+        }
+
+        #chart-box {
+            flex: 2;
+            border-right: 1px solid #333;
+            position: relative;
+        }
+
+        #controls {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+            background: #1a1a1a;
+        }
+
+        .btn {
+            padding: 10px;
+            background: #2962FF;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .btn:hover {
+            background: #0039CB;
+        }
+
+        .log-entry {
+            font-family: monospace;
+            font-size: 12px;
+            border-bottom: 1px solid #333;
+            padding: 4px;
+        }
+
+        .pass {
+            color: #00E676;
+        }
+
+        .fail {
+            color: #FF1744;
+        }
+
+        .info {
+            color: #2979FF;
+        }
+
+        h2 {
+            margin-top: 0;
+            border-bottom: 1px solid #555;
+            padding-bottom: 5px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="chart-box"></div>
+    <div id="controls">
+        <h2>Strategy Debugger</h2>
+        <div>
+            <button class="btn" onclick="runCalibrationAndTest()">1. FIND & RUN SCENARIO 🚀</button>
+        </div>
+        <div id="status" style="font-size: 14px; color: #888;">Ready...</div>
+        <div id="verdict" style="font-size: 18px; font-weight: bold; margin: 10px 0;"></div>
+        <div id="logs" style="background: #000; padding: 10px; height: 300px; overflow-y: auto;"></div>
+    </div>
+
+    <!-- Mock Env -->
+    <script>
+        window.localStorage = { getItem: () => null, setItem: () => { }, removeItem: () => { } };
+        document.body.innerHTML += '<div style="display:none" id="bot-logs"></div><div style="display:none" id="bot-status-indicator"></div><div style="display:none" id="bot-balance"></div><div style="display:none" id="bot-pnl"></div><div style="display:none" id="bot-indicators"></div><div style="display:none" id="btn-bot-toggle"></div><div style="display:none" id="btn-test-sound"></div>';
+    </script>
+    <script src="bot.js"></script>
+
+    <script>
+        // --- CHART SETUP ---
+        const chart = LightweightCharts.createChart(document.getElementById('chart-box'), {
+            layout: { background: { color: '#121212' }, textColor: '#DDD' },
+            grid: { vertLines: { color: '#333' }, horzLines: { color: '#333' } },
+            timeScale: { timeVisible: true, secondsVisible: true }
+        });
+        const candleSeries = chart.addCandlestickSeries();
+
+        // MOCK ChartManager for Bot
+        window.ChartManager = {
+            addMarker: (time, price, type, text) => {
+                log(`[CHART] Bot requested marker: ${type} @ ${price}`, 'PASS');
+                const color = (type === 'BUY' || type.includes('LONG')) ? '#00E676' : '#FF1744';
+                const shape = (type === 'BUY' || type.includes('LONG')) ? 'arrowUp' : 'arrowDown';
+                const pos = (type === 'BUY' || type.includes('LONG')) ? 'belowBar' : 'aboveBar';
+                candleSeries.setMarkers([{ time, position: pos, color, shape, text }]);
+            }
+        };
+
+        function log(msg, type = 'INFO') {
+            const div = document.createElement('div');
+            div.className = `log-entry ${type.toLowerCase()}`;
+            div.innerHTML = `[${type}] ${msg}`;
+            document.getElementById('logs').prepend(div);
+        }
+
+        // --- CALIBRATION & GENERATION ---
+        function runCalibrationAndTest() {
+            log("Starting Auto-Calibration...", 'INFO');
+            document.getElementById('status').innerText = "Simulating thousands of scenarios...";
+
+            // 1. Find Valid Params
+            const best = findParams();
+
+            if (!best) {
+                log("CRITICAL FAIL: No valid logic parameters found even with wide search.", 'FAIL');
+                document.getElementById('status').innerText = "Calibration Failed.";
+                return;
+            }
+
+            log(`MATCH FOUND! Trend=+${best.ts}, Pullback=${best.ps} (x${best.pl} bars)`, 'PASS');
+            log(`Predicted Metrics -> RSI: ${best.rsi.toFixed(2)}, MACD: ${best.macdHist.toFixed(2)}`, 'INFO');
+
+            // 2. Generate Full Data
+            let prices = [];
+            let p = 50000;
+            let time = Math.floor(Date.now() / 1000) - 200 * 60;
+
+            // Trend
+            for (let i = 0; i < 100; i++) {
+                p += best.ts;
+                prices.push({ time: time + i * 60, open: p - 2, high: p + 5, low: p - 5, close: p });
+            }
+            // Pullback
+            let startIndex = 100;
+            for (let i = 0; i < best.pl; i++) {
+                p += best.ps;
+                prices.push({ time: time + (startIndex + i) * 60, open: p + 2, high: p + 3, low: p - 3, close: p });
+            }
+            // Trigger
+            startIndex += best.pl;
+            p += best.ts * 4; // Big breakout
+            const triggerCandle = { time: time + startIndex * 60, open: p - 20, high: p + 5, low: p - 25, close: p };
+            prices.push(triggerCandle);
+
+            // 3. Render
+            candleSeries.setData(prices);
+            chart.timeScale().fitContent();
+
+            // 4. Run Bot
+            log("Executing Bot on Generated Data...", 'INFO');
+            const bot = new TradingBot();
+            bot.isRunning = true;
+            bot.paperBalance = 10000;
+
+            // Spy on internal log
+            let tradeOpen = false;
+            bot.log = (m, t) => {
+                if (m.includes("OPEN LONG")) tradeOpen = true;
+                if (m.includes("Detected")) log(m, 'INFO');
+            };
+
+            bot.processTick(prices, triggerCandle.close);
+
+            const v = document.getElementById('verdict');
+            if (tradeOpen) {
+                v.innerHTML = "<span class='pass'>✅ TRADE EXECUTED</span>";
+                v.style.color = "#00E676";
+                log("Bot Logic Successfully Triggered!", 'PASS');
+            } else {
+                v.innerHTML = "<span class='fail'>❌ NO TRADE</span>";
+                v.style.color = "#FF1744";
+                log("Bot refused entry. Check logs for details.", 'FAIL');
+            }
+            document.getElementById('status').innerText = "Test Complete.";
+        }
+
+        // INTERNAL SIMULATOR (Boosted Trend for MACD Buffer)
+        function findParams() {
+            // High Trend Slopes needed to keep MACD positive during pullback
+            const trendSlopes = [5, 8, 10, 15, 20, 25, 30, 40, 50];
+            // Gentle Pullbacks to avoid crashing MACD
+            const pbSlopes = [-0.5, -1, -1.5, -2, -3, -4];
+            // Longer Durations to allow RSI to drift down
+            const pbLens = [4, 6, 8, 10, 12, 15, 20, 25];
+
+            let bestScenario = null;
+            let bestScore = Infinity;
+
+            for (let ts of trendSlopes) {
+                for (let ps of pbSlopes) {
+                    for (let pl of pbLens) {
+                        let prices = [];
+                        let p = 50000;
+                        // 120 bars trend
+                        for (let i = 0; i < 120; i++) { p += ts; prices.push(p); }
+                        // Pullback
+                        for (let i = 0; i < pl; i++) { p += ps; prices.push(p); }
+
+                        const candles = createCandles(prices);
+
+                        const rsiArr = Indicators.rsi(candles, 14) || [];
+                        const macdObj = Indicators.macd(candles);
+                        const emaArr = Indicators.ema(candles, 50) || [];
+
+                        if (rsiArr.length < 1 || !macdObj || !macdObj.histogram || emaArr.length < 1) continue;
+
+                        const rsi = rsiArr[rsiArr.length - 1];
+                        const macdHist = macdObj.histogram[macdObj.histogram.length - 1];
+                        const ema50 = emaArr[emaArr.length - 1];
+                        const lastP = prices[prices.length - 1];
+
+                        // SCORING ALGORITHM
+                        // Target: RSI ~ 52
+                        // Constraint: MACD > 0, Price > EMA
+
+                        let score = Math.abs(rsi - 52); // Closer to 52 is better
+
+                        // Penalties
+                        if (macdHist <= 0) score += 1000; // HUGE penalty if negative MACD
+                        if (lastP <= ema50) score += 500;  // Big penalty if below EMA
+                        if (rsi > 60) score += 100; // Penalty if still overbought
+                        if (rsi < 40) score += 100; // Penalty if too oversold
+
+                        if (score < bestScore) {
+                            bestScore = score;
+                            bestScenario = { ts, ps, pl, rsi, macdHist, ema50, lastP };
+                        }
+                    }
+                }
+            }
+
+            if (bestScenario) {
+                log(`[DEBUG] Best Fit Score: ${bestScore.toFixed(1)} (RSI:${bestScenario.rsi.toFixed(1)}, MACD:${bestScenario.macdHist.toFixed(4)})`, 'INFO');
+            }
+            return bestScenario;
+        }
+
+        function createCandles(priceArr) {
+            return priceArr.map((p, i) => ({
+                time: 1000 + i * 60,
+                open: p,
+                high: p + 5, // Wicks for ADX
+                low: p - 5,
+                close: p,
+                volume: 1000
+            }));
+        }
+    </script>
+
+</body>
+
+</html>
