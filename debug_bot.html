@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bot Logic Debugger</title>
+    <style>
+        body {
+            background: #121212;
+            color: white;
+            font-family: monospace;
+            padding: 20px;
+        }
+
+        #log {
+            background: #000;
+            padding: 10px;
+            border: 1px solid #333;
+            height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: #00C853;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🤖 Bot Logic Debugger</h1>
+    <p>This tool simulates market data to test if the bot triggers trades.</p>
+    <button onclick="runSimulation()">Run Simulation (Generate 200 Candles)</button>
+    <div id="log"></div>
+
+    <!DOCTYPE html>
+    <html lang="en">
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Bot Logic Debugger</title>
+        <style>
+            body {
+                background: #121212;
+                color: white;
+                font-family: monospace;
+                padding: 20px;
+            }
+
+            #log {
+                background: #000;
+                padding: 10px;
+                border: 1px solid #333;
+                height: 400px;
+                overflow-y: auto;
+                white-space: pre-wrap;
+            }
+
+            button {
+                padding: 10px 20px;
+                background: #00C853;
+                border: none;
+                color: white;
+                cursor: pointer;
+                font-weight: bold;
+                margin-bottom: 10px;
+            }
+        </style>
+    </head>
+
+    <body>
+        <h1>🤖 Bot Logic Debugger</h1>
+        <p>This tool simulates market data to test if the bot triggers trades.</p>
+        <button onclick="runSimulation()">Run Simulation (Generate 200 Candles)</button>
+        <div id="log"></div>
+
+        <!-- Mock UI Elements for Bot to attach to -->
+        <div id="bot-logs" style="display: none;"></div>
+        <div id="bot-indicators" style="display: none;"></div>
+        <div id="bot-status-indicator" style="display: none;"></div>
+        <button id="btn-bot-toggle" style="display: none;"></button>
+
+        <script src="bot.js"></script>
+        <script>
+            const logEl = document.getElementById('log');
+
+            // Override bot log to print here
+            if (typeof autoBot !== 'undefined') {
+                autoBot.log = (msg, type) => {
+                    const color = type === 'BUY' ? '#00C853' : (type === 'SELL' ? '#FF3D00' : (type === 'ADAPT' ? '#2979FF' : '#ccc'));
+                    logEl.innerHTML += `<div style="color: ${color}">[BOT] ${msg}</div>`;
+                    logEl.scrollTop = logEl.scrollHeight;
+                };
+            } else {
+                logEl.innerHTML += `<div style="color: red">CRITICAL: autoBot not defined. Check bot.js for syntax errors.</div>`;
+            }
+
+            function generateCandle(prevClose, trend, volatilityMultiplier = 1.0) {
+                const volatility = prevClose * 0.002 * volatilityMultiplier;
+                const change = (Math.random() - 0.5 + trend) * volatility;
+                const close = prevClose + change;
+                const high = Math.max(prevClose, close) + Math.random() * volatility;
+                const low = Math.min(prevClose, close) - Math.random() * volatility;
+                return { close, high, low, open: prevClose, volume: 1000 };
+            }
+
+            function runSimulation() {
+                if (typeof autoBot === 'undefined') {
+                    logEl.innerHTML += "Cannot run: Bot not loaded.\n";
+                    return;
+                }
+
+                logEl.innerHTML = "Starting Trend Flow & Momentum Simulation...\n";
+                autoBot.isRunning = true;
+                autoBot.paperBalance = 10000; // Reset balance
+                autoBot.totalPnL = 0;
+                autoBot.position = null;
+
+                let price = 50000;
+                const candles = [];
+
+                // 1. Warmup (105 candles needed for EMA50 + MACD)
+                logEl.innerHTML += "Phase 1: Warmup (110 candles)...\n";
+                for (let i = 0; i < 110; i++) {
+                    const c = generateCandle(price, 0);
+                    price = c.close;
+                    candles.push(c);
+                }
+
+                // 2. Strong Uptrend (Should trigger LONG)
+                // We need: Price > EMA50, MACD > 0, RSI < 60
+                // To get RSI < 60 in uptrend, we need a small pullback.
+                logEl.innerHTML += "Phase 2: Strong Uptrend + Pullback...\n";
+
+                // Push price up fast to get MACD > 0 and Price > EMA
+                for (let i = 0; i < 20; i++) {
+                    const c = generateCandle(price, 0.005); // Strong up
+                    price = c.close;
+                    candles.push(c);
+                    autoBot.processTick(candles, price);
+                }
+
+                // Small pullback to lower RSI below 60
+                logEl.innerHTML += ">> Triggering Pullback...\n";
+                for (let i = 0; i < 3; i++) {
+                    const c = generateCandle(price, -0.002); // Small dip
+                    price = c.close;
+                    candles.push(c);
+                    autoBot.processTick(candles, price);
+                }
+
+                // Resume Uptrend (Trigger Entry)
+                logEl.innerHTML += ">> Resuming Uptrend...\n";
+                for (let i = 0; i < 5; i++) {
+                    const c = generateCandle(price, 0.005);
+                    price = c.close;
+                    candles.push(c);
+                    autoBot.processTick(candles, price);
+                }
+
+                // 3. Strong Downtrend (Should trigger SHORT)
+                logEl.innerHTML += "Phase 3: Reversing to Downtrend...\n";
+                for (let i = 0; i < 40; i++) {
+< !DOCTYPE html >
+                        <html lang="en">
+
+                            <head>
+                                <meta charset="UTF-8">
+                                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                                        <title>Bot Logic Debugger</title>
+                                        <style>
+                                            body {
+                                                background: #121212;
+                                            color: white;
+                                            font-family: monospace;
+                                            padding: 20px;
+        }
+
+                                            #log {
+                                                background: #000;
+                                            padding: 10px;
+                                            border: 1px solid #333;
+                                            height: 400px;
+                                            overflow-y: auto;
+                                            white-space: pre-wrap;
+        }
+
+                                            button {
+                                                padding: 10px 20px;
+                                            background: #00C853;
+                                            border: none;
+                                            color: white;
+                                            cursor: pointer;
+                                            font-weight: bold;
+                                            margin-bottom: 10px;
+        }
+                                        </style>
+                                    </head>
+
+                                    <body>
+                                        <h1>🤖 Bot Logic Debugger</h1>
+                                        <p>This tool simulates market data to test if the bot triggers trades.</p>
+                                        <button onclick="runSimulation()">Run Simulation (Generate 200 Candles)</button>
+                                        <div id="log"></div>
+
+                                        <!DOCTYPE html>
+                                        <html lang="en">
+
+                                            <head>
+                                                <meta charset="UTF-8">
+                                                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                                                        <title>Bot Logic Debugger</title>
+                                                        <style>
+                                                            body {
+                                                                background: #121212;
+                                                            color: white;
+                                                            font-family: monospace;
+                                                            padding: 20px;
+            }
+
+                                                            #log {
+                                                                background: #000;
+                                                            padding: 10px;
+                                                            border: 1px solid #333;
+                                                            height: 400px;
+                                                            overflow-y: auto;
+                                                            white-space: pre-wrap;
+            }
+
+                                                            button {
+                                                                padding: 10px 20px;
+                                                            background: #00C853;
+                                                            border: none;
+                                                            color: white;
+                                                            cursor: pointer;
+                                                            font-weight: bold;
+                                                            margin-bottom: 10px;
+            }
+                                                        </style>
+                                                    </head>
+
+                                                    <body>
+                                                        <h1>🤖 Bot Logic Debugger</h1>
+                                                        <p>This tool simulates market data to test if the bot triggers trades.</p>
+                                                        <button onclick="runSimulation()">Run Simulation (Generate 200 Candles)</button>
+                                                        <div id="log"></div>
+
+        <!-- Mock UI Elements for Bot to attach to -->
+                                                        <div id="bot-logs" style="display: none;"></div>
+                                                        <div id="bot-indicators" style="display: none;"></div>
+                                                        <div id="bot-status-indicator" style="display: none;"></div>
+                                                        <button id="btn-bot-toggle" style="display: none;"></button>
+
+                                                        <script src="bot.js"></script>
+        <script>
+                                        const logEl = document.getElementById('log');
+
+                                        // Override bot log to print here
+                                        if (typeof autoBot !== 'undefined') {
+                                            autoBot.log = (msg, type) => {
+                                                const color = type === 'BUY' ? '#00C853' : (type === 'SELL' ? '#FF3D00' : (type === 'ADAPT' ? '#2979FF' : '#ccc'));
+                                                logEl.innerHTML += `<div style="color: ${color}">[BOT] ${msg}</div>`;
+                                                logEl.scrollTop = logEl.scrollHeight;
+                                            };
+            } else {
+                                            logEl.innerHTML += `<div style="color: red">CRITICAL: autoBot not defined. Check bot.js for syntax errors.</div>`;
+            }
+
+                                        function generateCandle(prevClose, trend, volatilityMultiplier = 1.0) {
+                const volatility = prevClose * 0.002 * volatilityMultiplier;
+                                        const change = (Math.random() - 0.5 + trend) * volatility;
+                                        const close = prevClose + change;
+                                        const high = Math.max(prevClose, close) + Math.random() * volatility;
+                                        const low = Math.min(prevClose, close) - Math.random() * volatility;
+                                        return {close, high, low, open: prevClose, volume: 1000 };
+            }
+
+                                        function runSimulation() {
+                if (typeof autoBot === 'undefined') {
+                                            logEl.innerHTML += "Cannot run: Bot not loaded.\n";
+                                        return;
+                }
+
+                                        logEl.innerHTML = "Starting Trend Flow & Momentum Simulation...\n";
+                                        autoBot.isRunning = true;
+                                        autoBot.paperBalance = 10000; // Reset balance
+                                        autoBot.totalPnL = 0;
+                                        autoBot.position = null;
+
+                                        let price = 50000;
+                                        const candles = [];
+
+                                        // 1. Warmup (105 candles needed for EMA50 + MACD)
+                                        logEl.innerHTML += "Phase 1: Warmup (110 candles)...\n";
+                                        for (let i = 0; i < 110; i++) {
+                    const c = generateCandle(price, 0);
+                                        price = c.close;
+                                        candles.push(c);
+                }
+
+                                        try {
+                                            // 2. Strong Uptrend (Should trigger LONG)
+                                            // We need: Price > EMA50, MACD > 0, RSI < 60
+                                            // To get RSI < 60 in uptrend, we need a small pullback.
+                                            logEl.innerHTML += "Phase 2: Strong Uptrend + Pullback...\n";
+
+                                        // Push price up fast to get MACD > 0 and Price > EMA
+                                        for (let i = 0; i < 20; i++) {
+                    const c = generateCandle(price, 0.005); // Strong up
+                                        price = c.close;
+                                        candles.push(c);
+                                        autoBot.processTick(candles, price);
+                }
+
+                // Small pullback to lower RSI below 60
+                logEl.innerHTML += ">> Triggering Pullback...\n";
+                                        for (let i = 0; i < 3; i++) {
+                    const c = generateCandle(price, -0.002); // Small dip
+                                        price = c.close;
+                                        candles.push(c);
+                                        autoBot.processTick(candles, price);
+                }
+
+                // Resume Uptrend (Trigger Entry)
+                logEl.innerHTML += ">> Resuming Uptrend...\n";
+                                        for (let i = 0; i < 5; i++) {
+                    const c = generateCandle(price, 0.005);
+                                        price = c.close;
+                                        candles.push(c);
+                                        autoBot.processTick(candles, price);
+                }
+
+                                        // 3. Strong Downtrend (Should trigger SHORT)
+                                        logEl.innerHTML += "Phase 3: Reversing to Downtrend...\n";
+                                        for (let i = 0; i < 40; i++) {
+                    const c = generateCandle(price, -0.005); // Strong down
+                                        price = c.close;
+                                        candles.push(c);
+                                        autoBot.processTick(candles, price);
+                }
+
+                // Pullback up (RSI > 40)
+                logEl.innerHTML += ">> Triggering Bearish Pullback...\n";
+                                        for (let i = 0; i < 3; i++) {
+                    const c = generateCandle(price, 0.002); // Small rally
+                                        price = c.close;
+                                        candles.push(c);
+                                        autoBot.processTick(candles, price);
+                }
+
+                // Resume Downtrend
+                logEl.innerHTML += ">> Resuming Downtrend...\n";
+                                        for (let i = 0; i < 5; i++) {
+                    const c = generateCandle(price, -0.005);
+                                        price = c.close;
+                                        candles.push(c);
+                                        autoBot.processTick(candles, price);
+                }
+
+                                        logEl.innerHTML += "Simulation Complete.\n";
+            } catch (e) {
+                                            logEl.innerHTML += `<div style="color: red; font-weight: bold;">CRITICAL ERROR: ${e.message}</div>`;
+                                        logEl.innerHTML += `<div style="color: red;">${e.stack}</div>`;
+                console.error(e);
+            }
+        }
+        </script>
+    </body>
+
+    </html>

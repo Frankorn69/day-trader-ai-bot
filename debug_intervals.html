@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interval Debugger</title>
+    <style>
+        body {
+            background: #121212;
+            color: white;
+            font-family: sans-serif;
+            padding: 20px;
+        }
+
+        #controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 10px 20px;
+            cursor: pointer;
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+        }
+
+        button:hover {
+            background: #444;
+        }
+
+        #log {
+            background: #222;
+            padding: 10px;
+            height: 300px;
+            overflow: auto;
+            border: 1px solid #444;
+            font-family: monospace;
+            margin-bottom: 20px;
+        }
+
+        #chart {
+            width: 100%;
+            height: 400px;
+            border: 1px solid #444;
+        }
+
+        .success {
+            color: #00C853;
+        }
+
+        .error {
+            color: #FF3D00;
+        }
+
+        .info {
+            color: #2962FF;
+        }
+    </style>
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+
+<body>
+    <h1>Interval Debugger</h1>
+    <div id="controls">
+        <button onclick="testInterval('1')">1 Minute (1)</button>
+        <button onclick="testInterval('5')">5 Minutes (5)</button>
+        <button onclick="testInterval('15')">15 Minutes (15)</button>
+        <button onclick="testInterval('60')">1 Hour (60)</button>
+        <button onclick="testInterval('240')">4 Hours (240)</button>
+        <button onclick="testInterval('D')">1 Day (D)</button>
+        <button onclick="testInterval('W')">1 Week (W)</button>
+        <button onclick="testInterval('M')">1 Month (M)</button>
+    </div>
+
+    <div id="log">Ready to test...<br></div>
+    <div id="chart"></div>
+
+    <script>
+        const logEl = document.getElementById('log');
+        let chart, series;
+
+        function log(msg, type = '') {
+            const span = `<span class="${type}">[${new Date().toLocaleTimeString()}] ${msg}</span>`;
+            logEl.innerHTML += span + '<br>';
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(msg);
+        }
+
+        // Initialize Chart
+        try {
+            const container = document.getElementById('chart');
+            chart = LightweightCharts.createChart(container, {
+                layout: { background: { type: 'solid', color: '#121212' }, textColor: '#DDD' },
+                grid: { vertLines: { color: '#333' }, horzLines: { color: '#333' } },
+                timeScale: { timeVisible: true, secondsVisible: false }
+            });
+            series = chart.addCandlestickSeries();
+            log('Chart initialized successfully.', 'success');
+        } catch (e) {
+            log('CRITICAL: Failed to init chart: ' + e.message, 'error');
+        }
+
+        async function testInterval(interval) {
+            log(`----------------------------------------`);
+            log(`Testing Interval: ${interval}...`, 'info');
+
+            const symbol = 'BTCUSDT';
+            const url = `https://api.bybit.com/v5/market/kline?category=spot&symbol=${symbol}&interval=${interval}&limit=200`;
+
+            log(`Fetching: ${url}`);
+
+            try {
+                const response = await fetch(url);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP Error ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.retCode !== 0) {
+                    throw new Error(`API Error: ${data.retMsg} (Code: ${data.retCode})`);
+                }
+
+                const candles = data.result.list;
+                log(`Received ${candles.length} candles.`, 'success');
+
+                if (candles.length > 0) {
+                    // Parse Data
+                    const parsedData = candles.map(item => ({
+                        time: parseInt(item[0]) / 1000,
+                        open: parseFloat(item[1]),
+                        high: parseFloat(item[2]),
+                        low: parseFloat(item[3]),
+                        close: parseFloat(item[4])
+                    })).reverse(); // Bybit sends newest first
+
+                    // Log first and last
+                    const first = new Date(parsedData[0].time * 1000).toLocaleString();
+                    const last = new Date(parsedData[parsedData.length - 1].time * 1000).toLocaleString();
+                    log(`Range: ${first} -> ${last}`);
+
+                    // Update Chart
+                    series.setData(parsedData);
+                    chart.timeScale().fitContent();
+                    log('Chart updated.', 'success');
+                } else {
+                    log('Warning: API returned 0 candles.', 'error');
+                }
+
+            } catch (e) {
+                log(`FAILED: ${e.message}`, 'error');
+                log('Likely Cause: CORS (if running from file://) or Invalid Interval.', 'error');
+            }
+        }
+    </script>
+</body>
+
+</html>

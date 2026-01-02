@@ -1,0 +1,543 @@
+:root {
+    /* Colors - Dark Theme */
+    --bg-app: #121212;
+    --bg-panel: #1E1E1E;
+    --bg-input: #2A2A2A;
+    --border-color: #333333;
+
+    --text-primary: #EAEAEA;
+    --text-secondary: #B0B0B0;
+    --text-muted: #666666;
+
+    --accent-color: #2962FF;
+    --buy-color: #00C853;
+    --sell-color: #FF3D00;
+    --buy-bg: rgba(0, 200, 83, 0.15);
+    --sell-bg: rgba(255, 61, 0, 0.15);
+
+    /* Spacing */
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 16px;
+    --spacing-lg: 24px;
+
+    /* Typography */
+    --font-main: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-app);
+    color: var(--text-primary);
+    font-family: var(--font-main);
+    height: 100vh;
+    overflow: hidden;
+    font-size: 14px;
+}
+
+/* Layout */
+.app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+    /* Ensure full width */
+}
+
+.header {
+    height: 50px;
+    background-color: var(--bg-panel);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    padding: 0 var(--spacing-md);
+    justify-content: space-between;
+    flex-shrink: 0;
+    /* Prevent header from shrinking */
+}
+
+.main-grid {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    grid-template-rows: 1fr 250px;
+    height: calc(100vh - 50px);
+    width: 100%;
+    overflow: hidden;
+    /* Prevent scrollbars on main grid */
+}
+
+.chart-section {
+    grid-column: 1 / 2;
+    grid-row: 1 / 2;
+    border-right: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    /* Explicit height */
+    min-height: 0;
+    /* Allow flex child to shrink below content size */
+    overflow: hidden;
+}
+
+.sidebar {
+    grid-column: 2 / 3;
+    grid-row: 1 / 3;
+    background-color: var(--bg-panel);
+    border-left: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow-y: auto;
+    /* Allow scrolling in sidebar if needed */
+}
+
+.bottom-panel {
+    grid-column: 1 / 2;
+    grid-row: 2 / 3;
+    background-color: var(--bg-panel);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* Header Components */
+.logo-section {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-weight: 700;
+    font-size: 16px;
+}
+
+.logo-icon {
+    color: var(--accent-color);
+}
+
+.market-ticker {
+    display: flex;
+    gap: var(--spacing-lg);
+}
+
+.ticker-item {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: center;
+    font-family: var(--font-mono);
+}
+
+.ticker-item .symbol {
+    font-weight: 600;
+}
+
+.ticker-item .price {
+    color: var(--text-primary);
+}
+
+.ticker-item .change {
+    font-size: 12px;
+}
+
+.header-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: center;
+}
+
+.icon-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: var(--spacing-xs);
+    border-radius: 4px;
+}
+
+.icon-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+
+.user-profile .avatar {
+    width: 28px;
+    height: 28px;
+    background-color: var(--accent-color);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+/* Panel Headers */
+.panel-header {
+    height: 40px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    padding: 0 var(--spacing-md);
+    justify-content: space-between;
+    background-color: var(--bg-panel);
+    flex-shrink: 0;
+}
+
+.panel-title {
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Chart Controls */
+.timeframe-selector {
+    display: flex;
+    gap: 2px;
+}
+
+.tf-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 12px;
+    border-radius: 4px;
+}
+
+.tf-btn:hover {
+    color: var(--text-primary);
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.tf-btn.active {
+    color: var(--accent-color);
+    background-color: rgba(41, 98, 255, 0.1);
+    font-weight: 600;
+}
+
+/* Range Buttons */
+.range-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 11px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.range-btn:hover {
+    color: var(--text-primary);
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.range-btn.active {
+    color: var(--buy-color);
+    /* Green for ranges to distinguish */
+    background-color: var(--buy-bg);
+    font-weight: 600;
+}
+
+#chart-container {
+    flex: 1;
+    position: relative;
+    background-color: var(--bg-app);
+    width: 100%;
+    height: 600px;
+    /* Fixed height as requested */
+    /* Explicit height */
+    min-height: 0;
+    /* Crucial for flex child */
+    overflow: hidden;
+}
+
+/* Order Form */
+.order-form {
+    padding: var(--spacing-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.tabs {
+    display: flex;
+    background-color: var(--bg-app);
+    padding: 2px;
+    border-radius: 4px;
+    margin-bottom: var(--spacing-sm);
+}
+
+.tab-btn {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    padding: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    border-radius: 4px;
+}
+
+.tab-btn.active {
+    background-color: var(--bg-panel);
+    color: var(--text-primary);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.input-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.input-group label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.input-group input {
+    background-color: var(--bg-input);
+    border: 1px solid transparent;
+    padding: 8px 12px;
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    text-align: right;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.input-group input:focus {
+    border-color: var(--accent-color);
+}
+
+.slider-container {
+    padding: var(--spacing-sm) 0;
+}
+
+.slider {
+    width: 100%;
+    height: 4px;
+    background: var(--bg-input);
+    border-radius: 2px;
+    outline: none;
+    -webkit-appearance: none;
+}
+
+.slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px;
+    height: 12px;
+    background: var(--text-secondary);
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.slider-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+.order-buttons {
+    display: flex;
+    gap: var(--spacing-sm);
+}
+
+.btn {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 4px;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.btn:hover {
+    opacity: 0.9;
+}
+
+.btn-buy {
+    background-color: var(--buy-color);
+}
+
+.btn-sell {
+    background-color: var(--sell-color);
+}
+
+.account-info {
+    margin-top: auto;
+    border-top: 1px solid var(--border-color);
+    padding-top: var(--spacing-md);
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* Positions Table */
+.panel-tabs {
+    display: flex;
+    gap: var(--spacing-md);
+}
+
+.panel-tab {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 0 4px;
+    height: 40px;
+    border-bottom: 2px solid transparent;
+}
+
+.panel-tab.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--accent-color);
+}
+
+.table-container {
+    flex: 1;
+    overflow: auto;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    text-align: left;
+}
+
+.data-table th {
+    color: var(--text-muted);
+    font-weight: 500;
+    padding: 8px var(--spacing-md);
+    border-bottom: 1px solid var(--border-color);
+    position: sticky;
+    top: 0;
+    background-color: var(--bg-panel);
+}
+
+.data-table td {
+    padding: 8px var(--spacing-md);
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+}
+
+.data-table tr:hover {
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+/* Utilities */
+.text-buy {
+    color: var(--buy-color);
+}
+
+.text-sell {
+    color: var(--sell-color);
+}
+
+.text-win {
+    color: var(--buy-color);
+}
+
+.text-loss {
+    color: var(--sell-color);
+}
+
+.symbol-text {
+    font-weight: 600;
+    font-family: var(--font-main);
+}
+
+.leverage {
+    background-color: var(--bg-input);
+    padding: 1px 4px;
+    border-radius: 2px;
+    font-size: 10px;
+    color: var(--text-secondary);
+    margin-left: 4px;
+}
+
+.btn-small {
+    background: none;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 2px 8px;
+    border-radius: 2px;
+    cursor: pointer;
+    font-size: 11px;
+}
+
+.btn-small:hover {
+    border-color: var(--text-secondary);
+    color: var(--text-primary);
+}
+
+/* Debug Console */
+#debug-console {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 200px;
+    background-color: rgba(0, 0, 0, 0.9);
+    border-top: 1px solid var(--accent-color);
+    z-index: 9999;
+    font-family: 'JetBrains Mono', monospace;
+    display: flex;
+    flex-direction: column;
+}
+
+.debug-header {
+    padding: 5px 10px;
+    background: #333;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+#debug-logs {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+    font-size: 11px;
+    color: #ccc;
+}
+
+.log-entry {
+    margin-bottom: 2px;
+}
+
+.log-info {
+    color: #81D4FA;
+}
+
+.log-warn {
+    color: #FFD54F;
+}
+
+.log-error {
+    color: #FF5252;
+}

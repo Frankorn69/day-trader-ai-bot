@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProTrade Terminal</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Google Fonts for professional typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <!-- Lightweight Charts -->
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo-section">
+                <div class="logo-icon">⚡</div>
+                <span class="logo-text">ProTrade</span>
+            </div>
+            <div class="market-ticker">
+                <div class="ticker-item">
+                    <span class="symbol">BTC / USD</span>
+                    <span class="price" id="btc-price">Loading...</span>
+                    <span class="change" id="btc-change">--%</span>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button class="icon-btn">⚙️</button>
+                <button class="icon-btn">🔔</button>
+                <div class="user-profile">
+                    <div class="avatar">U</div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Grid -->
+        <main class="main-grid">
+            <!-- Chart Section -->
+            <section class="chart-section">
+                <div class="panel-header">
+                    <div class="panel-title">Chart</div>
+                    <div class="timeframe-selector">
+                        <button class="tf-btn active" data-interval="1">1m</button>
+                        <button class="tf-btn" data-interval="5">5m</button>
+                        <button class="tf-btn" data-interval="15">15m</button>
+                        <button class="tf-btn" data-interval="60">1h</button>
+                        <button class="tf-btn" data-interval="240">4h</button>
+                        <div style="width: 1px; background: #333; margin: 0 8px;"></div>
+                        <button class="range-btn" data-range="1D">1D</button>
+                        <button class="range-btn" data-range="1W">1W</button>
+                        <button class="range-btn" data-range="1M">1M</button>
+                        <button class="range-btn" data-range="6M">6M</button>
+                        <button class="range-btn" data-range="1Y">1Y</button>
+                        <button class="range-btn" data-range="MAX">MAX</button>
+                    </div>
+                </div>
+                <div id="chart-container"></div>
+            </section>
+
+            <!-- Order Book / Order Entry Sidebar -->
+            <aside class="sidebar">
+                <div class="panel-header">
+                    <div class="panel-title">Place Order</div>
+                </div>
+                <div class="order-form">
+                    <div class="tabs">
+                        <button class="tab-btn active">Limit</button>
+                        <button class="tab-btn">Market</button>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Price (USDT)</label>
+                        <input type="number" id="order-price" placeholder="0.00">
+                    </div>
+
+                    <div class="input-group">
+                        <label>Qty (BTC)</label>
+                        <input type="number" id="order-qty" placeholder="0.00">
+                    </div>
+
+                    <div class="slider-container">
+                        <input type="range" min="0" max="100" value="0" class="slider">
+                        <div class="slider-labels">
+                            <span>0%</span>
+                            <span>50%</span>
+                            <span>100%</span>
+                        </div>
+                    </div>
+
+                    <div class="order-buttons">
+                        <button class="btn btn-buy">Buy / Long</button>
+                        <button class="btn btn-sell">Sell / Short</button>
+                    </div>
+
+                    <div class="account-info">
+                        <div class="info-row">
+                            <span>Available</span>
+                            <span>10,000.00 USDT</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Auto-Bot Panel -->
+                <div class="panel-header" style="margin-top: 1px; border-top: 1px solid var(--border-color);">
+                    <div class="panel-title">Auto-Bot 🤖 <span id="bot-status-indicator"
+                            style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #666; margin-left: 5px;"></span>
+                    </div>
+                </div>
+                <div class="ai-panel"
+                    style="padding: var(--spacing-md); display: flex; flex-direction: column; gap: 10px;">
+
+                    <!-- Paper Balance -->
+                    <div
+                        style="background: #1E1E1E; padding: 10px; border-radius: 4px; border: 1px solid #333; text-align: center;">
+                        <div style="font-size: 10px; color: #888; text-transform: uppercase;">Paper Balance</div>
+                        <div id="bot-balance" style="font-size: 18px; font-weight: bold; color: #fff;">10,000.00 USDT
+                        </div>
+                        <div id="bot-pnl" style="font-size: 11px; color: #666;">PnL: $0.00</div>
+                    </div>
+
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #888; background: #222; padding: 5px; border-radius: 4px;">
+                        <div id="bot-indicators">EMA: -- | RSI: --</div>
+                        <button id="btn-test-sound" title="Test Audio"
+                            style="background: none; border: none; cursor: pointer; font-size: 14px;">🔔</button>
+                    </div>
+
+                    <button id="btn-bot-toggle" class="btn" style="background: #00C853; font-weight: bold;">START BOT
+                        ▶️</button>
+
+                    <div id="bot-logs"
+                        style="background: #111; padding: 5px; border-radius: 4px; border: 1px solid #333; height: 150px; overflow-y: auto; font-family: 'JetBrains Mono', monospace;">
+                        <div style="color: #666; text-align: center; margin-top: 10px;">Logs will appear here...</div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Bottom Panel (Positions) -->
+            <section class="bottom-panel">
+                <div class="panel-header">
+                    <div class="panel-title">Positions</div>
+                    <div class="panel-tabs">
+                        <button class="panel-tab active">Positions (1)</button>
+                        <button class="panel-tab">Open Orders (0)</button>
+                        <button class="panel-tab">History</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Symbol</th>
+                                <th>Side</th>
+                                <th>Size</th>
+                                <th>Entry Price</th>
+                                <th>Mark Price</th>
+                                <th>Liq. Price</th>
+                                <th>PnL (ROE%)</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Mock Data -->
+                            <tr>
+                                <td><span class="symbol-text">BTCUSDT</span> <span class="leverage">10x</span></td>
+                                <td class="text-buy">Long</td>
+                                <td>0.500</td>
+                                <td>42,150.50</td>
+                                <td id="pos-mark-price">42,200.00</td>
+                                <td>38,500.00</td>
+                                <td class="text-win">+125.50 (+5.2%)</td>
+                                <td><button class="btn-small">Close</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+    <div id="debug-console" style="display: none;">
+        <div class="debug-header">
+            <span>System Logs</span>
+            <button onclick="document.getElementById('debug-console').style.display='none'">Close</button>
+        </div>
+        <div id="debug-logs"></div>
+    </div>
+    <script src="bot.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced AI Debugger</title>
+    <style>
+        body {
+            background: #121212;
+            color: white;
+            font-family: 'Segoe UI', sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+
+        .card {
+            background: #1E1E1E;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #333;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #aaa;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            background: #2C2C2C;
+            color: white;
+            border: 1px solid #444;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #6200EA;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            border-radius: 4px;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+
+        button:hover {
+            background: #7C4DFF;
+        }
+
+        button.secondary {
+            background: #333;
+            border: 1px solid #555;
+        }
+
+        button.secondary:hover {
+            background: #444;
+        }
+
+        #log {
+            background: #000;
+            padding: 15px;
+            border: 1px solid #444;
+            font-family: 'Consolas', monospace;
+            height: 400px;
+            overflow: auto;
+            white-space: pre-wrap;
+            font-size: 13px;
+            color: #ccc;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            border-bottom: 1px solid #222;
+            padding-bottom: 2px;
+        }
+
+        .success {
+            color: #00C853;
+        }
+
+        .error {
+            color: #FF5252;
+        }
+
+        .info {
+            color: #40C4FF;
+        }
+
+        .warn {
+            color: #FFD740;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🤖 AI Connection Doctor</h1>
+
+    <div class="card">
+        <label>1. Gemini API Key</label>
+        <input type="password" id="api-key" placeholder="Paste your API Key here">
+
+        <label>2. Manual Test</label>
+        <div style="display: flex; gap: 10px;">
+            <input type="text" id="model-name" list="models" value="gemini-1.5-flash"
+                placeholder="e.g. gemini-1.5-flash" style="margin-bottom: 0;">
+            <button onclick="runDiagnostics()" style="width: 150px; margin-bottom: 0;">Test One</button>
+        </div>
+        <datalist id="models">
+            <option value="gemini-1.5-flash">Recommended</option>
+            <option value="gemini-1.5-flash-001">Alternative Flash</option>
+            <option value="gemini-pro">Legacy Pro</option>
+            <option value="gemini-1.5-pro">Pro Version</option>
+        </datalist>
+
+        <hr style="border: 0; border-top: 1px solid #333; margin: 20px 0;">
+
+        <label>3. Auto-Discovery (Recommended)</label>
+        <button onclick="autoDetect()" class="secondary">🔍 Auto-Detect Working Model</button>
+    </div>
+
+    <div id="log">Logs will appear here...</div>
+
+    <script>
+        const logEl = document.getElementById('log');
+
+        function log(msg, type = '') {
+            const div = document.createElement('div');
+            div.className = `log-entry ${type}`;
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logEl.appendChild(div);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        async function checkModel(apiKey, model) {
+            log(`Testing model: ${model}...`, 'info');
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: "Hello" }] }]
+                    })
+                });
+
+                if (response.ok) {
+                    log(`✅ SUCCESS! Model "${model}" is working!`, 'success');
+                    return true;
+                } else {
+                    log(`❌ Failed (${response.status})`, 'error');
+                    return false;
+                }
+            } catch (e) {
+                log(`❌ Network Error`, 'error');
+                return false;
+            }
+        }
+
+        async function autoDetect() {
+            logEl.innerHTML = '';
+            const apiKey = document.getElementById('api-key').value.trim();
+            if (!apiKey) {
+                log('❌ Error: API Key is missing.', 'error');
+                return;
+            }
+
+            const candidates = [
+                'gemini-1.5-flash',
+                'gemini-1.5-flash-001',
+                'gemini-1.5-pro',
+                'gemini-1.5-pro-001',
+                'gemini-pro',
+                'gemini-1.0-pro'
+            ];
+
+            log('🔍 Starting Auto-Discovery...', 'info');
+
+            for (const model of candidates) {
+                const works = await checkModel(apiKey, model);
+                if (works) {
+                    log('🎉 FOUND A WORKING MODEL!', 'success');
+                    log(`👉 Use this name in the main app: ${model}`, 'success');
+                    document.getElementById('model-name').value = model;
+                    return;
+                }
+                await new Promise(r => setTimeout(r, 500)); // Slight delay
+            }
+
+            log('⚠️ No working models found in the common list.', 'warn');
+            log('Check your API Key permissions or try creating a new key.', 'warn');
+        }
+
+        async function runDiagnostics() {
+            // ... (Same as before, simplified for brevity)
+            const apiKey = document.getElementById('api-key').value.trim();
+            const model = document.getElementById('model-name').value.trim();
+            if (!apiKey || !model) return log('Missing info', 'error');
+            await checkModel(apiKey, model);
+        }
+    </script>
+</body>
+
+</html>

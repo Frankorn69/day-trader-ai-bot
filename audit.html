@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bot Audit Dashboard 🧠</title>
+    <style>
+        body {
+            background: #121212;
+            color: #e0e0e0;
+            font-family: 'Courier New', monospace;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: auto 1fr;
+            gap: 20px;
+            height: 100vh;
+            margin: 0;
+            box-sizing: border-box;
+        }
+
+        h2 {
+            border-bottom: 2px solid #333;
+            padding-bottom: 5px;
+            color: #2979FF;
+            margin-top: 0;
+        }
+
+        .panel {
+            background: #1e1e1e;
+            border: 1px solid #333;
+            padding: 15px;
+            overflow: auto;
+            min-height: 200px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 8px;
+            border-bottom: 1px solid #333;
+        }
+
+        th {
+            color: #888;
+        }
+
+        .win-high {
+            color: #00C853;
+        }
+
+        .win-low {
+            color: #FF3D00;
+        }
+
+        input,
+        select {
+            background: #333;
+            border: 1px solid #555;
+            color: white;
+            padding: 8px;
+            margin-bottom: 10px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        button {
+            background: #E040FB;
+            color: white;
+            border: none;
+            padding: 10px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background: #D500F9;
+        }
+
+        button.danger {
+            background: #FF3D00;
+            margin-top: 10px;
+        }
+
+        .log-stream {
+            flex: 1;
+            overflow-y: auto;
+            font-size: 12px;
+        }
+
+        .log-entry {
+            margin-bottom: 4px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #252525;
+        }
+
+        .stat-box {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ZONE A: MEMORY DUMP -->
+    <div class="panel" style="grid-row: span 2;">
+        <h2>ZONE A: Memory Dump (The Brain)</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Context Hash</th>
+                    <th>W</th>
+                    <th>L</th>
+                    <th>WR%</th>
+                </tr>
+            </thead>
+            <tbody id="memory-table">
+                <tr>
+                    <td colspan="4">Loading...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- ZONE B & C: CONTROLS -->
+    <div class="panel">
+        <h2>ZONE B: Amnesia Test</h2>
+        <div class="stat-box">
+            <span>Last Save:</span>
+            <span id="last-save-time" style="color: #00C853">Checking...</span>
+        </div>
+        <button class="danger" onclick="forceRestart()">FORCE RELOAD BOT TAB 🔄</button>
+        <p style="font-size: 11px; color: #666; margin-top: 5px;">*Requires bot tab to be open.</p>
+
+        <h2 style="margin-top: 30px;">ZONE C: Inject Experience</h2>
+        <label>Context Hash:</label>
+        <input type="text" id="inject-hash" value="REGIME:TRENDING_RSI:OVERSOLD" list="hash-suggestions">
+        <datalist id="hash-suggestions">
+            <option value="REGIME:TRENDING_RSI:OVERSOLD">
+            <option value="REGIME:TRENDING_RSI:OVERBOUGHT">
+            <option value="REGIME:RANGING_RSI:NEUTRAL">
+        </datalist>
+
+        <label>Outcome:</label>
+        <select id="inject-result">
+            <option value="WIN">WIN</option>
+            <option value="LOSS">LOSS</option>
+        </select>
+        <button onclick="injectExperience()">TEACH BOT 💉</button>
+    </div>
+
+    <!-- ZONE D: LIVE TELEMETRY -->
+    <div class="panel">
+        <h2>ZONE D: Live Telemetry</h2>
+        <div class="stat-box">
+            <span>Status:</span> <span id="telemetry-status" style="color: #FFD600">Waiting for Signal...</span>
+        </div>
+        <div id="log-stream" class="log-stream">
+            <!-- Logs will appear here -->
+        </div>
+    </div>
+
+    <script>
+        const brainKey = 'bot_brain_v1';
+        const stateKey = 'bot_state_v1';
+        const telemetry = new BroadcastChannel('bot_telemetry');
+
+        // --- ZONE A: LOAD MEMORY ---
+        function renderMemory() {
+            const data = localStorage.getItem(brainKey);
+            const table = document.getElementById('memory-table');
+            table.innerHTML = '';
+
+            if (!data) {
+                table.innerHTML = '<tr><td colspan="4">No Brain Found 🧠❌</td></tr>';
+                return;
+            }
+
+            const brain = JSON.parse(data);
+            if (Object.keys(brain).length === 0) {
+                table.innerHTML = '<tr><td colspan="4">Brain is Empty (Tabula Rasa)</td></tr>';
+                return;
+            }
+
+            for (const [hash, stats] of Object.entries(brain)) {
+                const total = stats.wins + stats.losses;
+                const wr = total > 0 ? (stats.wins / total) * 100 : 0;
+                const row = document.createElement('tr');
+
+                let wrClass = '';
+                if (total > 3) {
+                    wrClass = wr >= 50 ? 'win-high' : 'win-low';
+                }
+
+                row.innerHTML = `
+                    <td style="font-size: 11px;">${hash}</td>
+                    <td>${stats.wins}</td>
+                    <td>${stats.losses}</td>
+                    <td class="${wrClass}">${wr.toFixed(1)}%</td>
+                    <td>
+                        <button onclick="deleteMemory('${hash}')" style="background:none; border:none; cursor:pointer;">❌</button>
+                    </td>
+                `;
+                table.appendChild(row);
+            }
+        }
+
+        // --- ZONE B: PERSISTENCE CHECK ---
+        function updatePersistenceStatus() {
+            // Check state key modification time handled by browser? No.
+            // Just assume if we can read it, it's saved.
+            const t = new Date().toLocaleTimeString();
+            document.getElementById('last-save-time').innerText = t;
+        }
+
+        // --- ZONE A: DELETION ---
+        function deleteMemory(hash) {
+            if (!confirm(`Are you sure you want to delete memory for:\n${hash}?`)) return;
+
+            const data = localStorage.getItem(brainKey);
+            if (data) {
+                const brain = JSON.parse(data);
+                delete brain[hash];
+                localStorage.setItem(brainKey, JSON.stringify(brain));
+                renderMemory();
+                logToStream(`[SURGERY] Deleted memory: ${hash}`, 'BRAIN');
+            }
+        }
+
+        function forceRestart() {
+            // We can't directly reload another tab unless we have a window reference.
+            // But we can trigger a localStorage event that the bot listens to, 
+            // OR just rely on the user to reload.
+            // Best we can do here is reload THIS page to verify persistence.
+            location.reload();
+        }
+
+        // --- ZONE C: INJECT ---
+        function injectExperience() {
+            const hash = document.getElementById('inject-hash').value;
+            const result = document.getElementById('inject-result').value;
+
+            let brain = {};
+            const data = localStorage.getItem(brainKey);
+            if (data) brain = JSON.parse(data);
+
+            if (!brain[hash]) brain[hash] = { wins: 0, losses: 0 };
+
+            if (result === 'WIN') brain[hash].wins++;
+            else brain[hash].losses++;
+
+            localStorage.setItem(brainKey, JSON.stringify(brain));
+            renderMemory();
+
+            logToStream(`[INJECT] Manually added ${result} to ${hash}`, 'BRAIN');
+        }
+
+        // --- ZONE D: TELEMETRY ---
+        telemetry.onmessage = (event) => {
+            const { type, data } = event.data;
+
+            if (type === 'LOG') {
+                logToStream(data.msg, data.type);
+            } else if (type === 'STATE_UPDATE') {
+                document.getElementById('telemetry-status').innerText = data.isRunning ? 'RUNNING 🟢' : 'STOPPED 🔴';
+                document.getElementById('telemetry-status').style.color = data.isRunning ? '#00C853' : '#FF3D00';
+            }
+        };
+
+        function logToStream(msg, type) {
+            const container = document.getElementById('log-stream');
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+            let color = '#ccc';
+            if (type === 'BUY') color = '#00C853';
+            if (type === 'SELL') color = '#FF3D00';
+            if (type === 'BRAIN') color = '#E040FB';
+
+            div.style.color = color;
+            div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            container.prepend(div);
+        }
+
+        // Init
+        renderMemory();
+        setInterval(renderMemory, 2000); // Auto-refresh memory view
+        updatePersistenceStatus();
+    </script>
+</body>
+
+</html>

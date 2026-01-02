@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chart Debugger</title>
+    <style>
+        body {
+            background: #121212;
+            color: white;
+            font-family: sans-serif;
+            padding: 20px;
+        }
+
+        #log {
+            background: #333;
+            padding: 10px;
+            height: 150px;
+            overflow: auto;
+            border: 1px solid #555;
+            margin-bottom: 20px;
+            font-family: monospace;
+        }
+
+        #test-container {
+            width: 100%;
+            height: 500px;
+            border: 2px solid #00C853;
+            position: relative;
+        }
+    </style>
+    <!-- Pin to version 4.1.1 which is known to work -->
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+
+<body>
+    <h1>Chart Debugger</h1>
+    <div id="log">Log initialized...<br></div>
+    <div id="test-container"></div>
+
+    <script>
+        const logEl = document.getElementById('log');
+        function log(msg) {
+            logEl.innerHTML += `[${new Date().toLocaleTimeString()}] ${msg}<br>`;
+            console.log(msg);
+        }
+
+        window.onerror = function (msg, url, line) {
+            log(`ERROR: ${msg} at ${line}`);
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            log('DOM Loaded.');
+
+            // 1. Check Library
+            if (typeof LightweightCharts === 'undefined') {
+                log('CRITICAL: LightweightCharts library NOT loaded. Check internet or CDN.');
+                return;
+            }
+            log('Library loaded successfully.');
+
+            // 2. Check Container
+            const container = document.getElementById('test-container');
+            const rect = container.getBoundingClientRect();
+            log(`Container dimensions: ${rect.width}px x ${rect.height}px`);
+
+            if (rect.height === 0) {
+                log('CRITICAL: Container has 0 height.');
+                return;
+            }
+
+            // 3. Create Chart
+            try {
+                log('Creating chart...');
+                const chart = LightweightCharts.createChart(container, {
+                    width: rect.width,
+                    height: rect.height,
+                    layout: { background: { type: 'solid', color: '#121212' }, textColor: '#DDD' },
+                    grid: { vertLines: { color: '#333' }, horzLines: { color: '#333' } }
+                });
+
+                // This method exists in v4.1.1
+                const series = chart.addCandlestickSeries();
+
+                // 4. Add Data
+                log('Generating test data...');
+                const data = [];
+                let time = Math.floor(Date.now() / 1000) - 100000;
+                let price = 50000;
+                for (let i = 0; i < 100; i++) {
+                    price += Math.random() * 100 - 50;
+                    data.push({ time: time + i * 60, open: price, high: price + 10, low: price - 10, close: price + 5 });
+                }
+
+                series.setData(data);
+                chart.timeScale().fitContent();
+
+                log('SUCCESS: Chart created and data set.');
+                log('If you see green/red candles below, the chart works.');
+            } catch (e) {
+                log(`CRITICAL EXCEPTION: ${e.message}`);
+            }
+        });
+    </script>
+</body>
+
+</html>

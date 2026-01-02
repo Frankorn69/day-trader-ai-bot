@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Bot Debugger</title>
+    <style>
+        body {
+            background: #121212;
+            color: #e0e0e0;
+            font-family: monospace;
+            padding: 20px;
+        }
+
+        .log-container {
+            background: #1e1e1e;
+            border: 1px solid #333;
+            padding: 10px;
+            height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            border-bottom: 1px solid #2a2a2a;
+            padding-bottom: 2px;
+        }
+
+        .error {
+            color: #ff5252;
+            font-weight: bold;
+        }
+
+        .success {
+            color: #69f0ae;
+        }
+
+        .info {
+            color: #40c4ff;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: #2962ff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background: #0039cb;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🤖 Ultimate Bot Debugger</h1>
+    <p>This tool loads <code>bot.js</code> and attempts to initialize the <code>TradingBot</code> class. It catches
+        syntax errors and runtime exceptions.</p>
+
+    <button onclick="runDiagnostics()">Run Diagnostics</button>
+
+    <div id="debug-log" class="log-container"></div>
+
+    <!-- Mock DOM Elements required by bot.js -->
+    <div id="bot-logs" style="display:none;"></div>
+    <div id="bot-balance" style="display:none;"></div>
+    <div id="bot-pnl" style="display:none;"></div>
+    <div id="bot-indicators" style="display:none;"></div>
+    <div id="bot-status-indicator" style="display:none;"></div>
+    <div id="btn-bot-toggle" style="display:none;"></div>
+    <div id="btn-test-sound" style="display:none;"></div>
+
+    <script>
+        const logEl = document.getElementById('debug-log');
+
+        function log(msg, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `log-entry ${type}`;
+            div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logEl.appendChild(div);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        // Mock ChartManager
+        window.ChartManager = {
+            addMarker: (t, p, type, txt) => log(`[MOCK CHART] Marker: ${type} @ ${p} (${txt})`, 'info')
+        };
+
+        async function runDiagnostics() {
+            log("Starting Diagnostics...", 'info');
+
+            try {
+                // 1. Load bot.js dynamically
+                log("Loading bot.js...", 'info');
+                const script = document.createElement('script');
+                script.src = 'bot.js';
+
+                script.onload = () => {
+                    log("bot.js loaded successfully.", 'success');
+                    testBotInitialization();
+                };
+
+                script.onerror = (e) => {
+                    log("Failed to load bot.js! Check console for syntax errors.", 'error');
+                };
+
+                document.body.appendChild(script);
+
+            } catch (e) {
+                log(`Unexpected Error: ${e.message}`, 'error');
+            }
+        }
+
+        function testBotInitialization() {
+            try {
+                if (typeof TradingBot === 'undefined') {
+                    throw new Error("TradingBot class is undefined. Syntax error likely prevented parsing.");
+                }
+
+                log("TradingBot class found.", 'success');
+
+                log("Attempting to instantiate TradingBot...", 'info');
+                const bot = new TradingBot();
+                log("TradingBot instantiated successfully!", 'success');
+
+                log("Testing start()...", 'info');
+                bot.start();
+
+                if (bot.isRunning) {
+                    log("Bot is running.", 'success');
+                } else {
+                    throw new Error("Bot failed to start.");
+                }
+
+                log("Testing processTick() with mock data...", 'info');
+                const mockCandles = [];
+                for (let i = 0; i < 110; i++) {
+                    mockCandles.push({ close: 100 + i, high: 105 + i, low: 95 + i, open: 100 + i, volume: 1000 });
+                }
+
+                bot.processTick(mockCandles, 200);
+                log("processTick executed without crash.", 'success');
+
+                log("Diagnostics Complete. Bot appears healthy.", 'success');
+
+            } catch (e) {
+                log(`Test Failed: ${e.message}`, 'error');
+                console.error(e);
+            }
+        }
+    </script>
+</body>
+
+</html>
