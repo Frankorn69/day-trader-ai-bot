@@ -175,15 +175,21 @@ const TradeJournal = {
 };
 
 class TradingBot {
-    constructor() {
-        this.isRunning = false;
-        this.position = null;
-        this.lastLogTime = 0;
-        this.paperBalance = 10000.00;
+    constructor(walletKey = 'proTrade_wallet_v2') {
+        this.walletKey = walletKey;
+        this.paperBalance = 27.00; // Micro-Account
         this.totalPnL = 0;
+        this.position = null; // { type: 'LONG', entryPrice, sl, tp, qty, atr, isTrailed }
+        this.isRunning = true;
+        this.lastLogTime = 0;
         this.brainKey = 'bot_brain_v1';
         this.stateKey = 'bot_state_v1';
-        this.walletKey = 'bot_wallet_v1';
+
+        // Deep Context Engine - HTF State
+        this.candlesH1 = [];
+        this.candlesH4 = [];
+        this.rollingRsiBaseline = 50; // Dynamic default
+        this.volatilityGuardActive = false;
 
         // Load Persistent Data
         this.loadWallet();
@@ -193,8 +199,8 @@ class TradingBot {
         this.telemetry = new BroadcastChannel('bot_telemetry');
 
         this.config = {
-            emaPeriod: 50,
-            rsiPeriod: 14,
+            emaPeriod: 200, // Updated
+            rsiPeriod: 21,  // Updated
             atrPeriod: 14,
             adxPeriod: 14
         };
@@ -207,11 +213,11 @@ class TradingBot {
         const data = localStorage.getItem(this.walletKey);
         if (data) {
             const wallet = JSON.parse(data);
-            this.paperBalance = wallet.balance || 10000.00;
+            this.paperBalance = wallet.balance !== undefined ? wallet.balance : 27.00;
             this.totalPnL = wallet.totalPnL || 0;
             console.log(`[WALLET] Loaded. Balance: $${this.paperBalance.toFixed(2)}`);
         } else {
-            this.paperBalance = 10000.00;
+            this.paperBalance = 27.00;
         }
     }
 
@@ -278,6 +284,21 @@ class TradingBot {
             logContainer.prepend(div);
         }
         this.telemetry.postMessage({ type: 'LOG', data: { timestamp, type, msg } });
+    }
+
+    broadcastDeepState(regime, htfBias, params, indicators) {
+        this.telemetry.postMessage({
+            type: 'HEARTBEAT',
+            data: {
+                regime,
+                htfBias,
+                params, // { rsiLimit, slMult, etc }
+                indicators, // { price, rsi, adx... }
+                wallet: { balance: this.paperBalance, pnl: this.totalPnL },
+                position: this.position,
+                timestamp: Date.now()
+            }
+        });
     }
 
     // --- STEP A: REGIME DETECTION ---
@@ -347,6 +368,57 @@ class TradingBot {
         this.log(`[BRAIN] Learned from ${result}. New Stats for [${hash}]: ${this.brain[hash].wins}W / ${this.brain[hash].losses}L`, 'BRAIN');
     }
 
+    // --- HTF FACTORY ---
+    updateHigherTimeframes(lastCandle) {
+        this.proposeCandle(this.candlesH1, lastCandle, 60); // 1h = 60m
+        this.proposeCandle(this.candlesH4, lastCandle, 240); // 4h = 240m
+    }
+
+    proposeCandle(htfArray, m1Candle, periodMinutes) {
+        const periodMs = periodMinutes * 60 * 1000;
+        const timeSlot = Math.floor(m1Candle.time / periodMs) * periodMs;
+
+        if (htfArray.length === 0 || htfArray[htfArray.length - 1].time !== timeSlot) {
+            // New Candle
+            htfArray.push({
+                time: timeSlot,
+                open: m1Candle.open,
+                high: m1Candle.high,
+                low: m1Candle.low,
+                close: m1Candle.close,
+                volume: m1Candle.volume
+            });
+        } else {
+            // Update Existing Candle
+            const c = htfArray[htfArray.length - 1];
+            c.high = Math.max(c.high, m1Candle.high);
+            c.low = Math.min(c.low, m1Candle.low);
+            c.close = m1Candle.close;
+            c.volume += m1Candle.volume;
+        }
+
+        // Keep buffer manageable (last 200 HTF bars)
+        if (htfArray.length > 200) htfArray.shift();
+    }
+
+    // --- DYNAMIC THRESHOLDS ---
+    getRollingRsiBaseline(candles) {
+        // Calculate Avg Low RSI of last 100 periods to find "Oversold" baseline
+        // Simplified: Just use SMA of RSI for baseline center
+        const rsiHistory = Indicators.rsi(candles, 21);
+        if (!rsiHistory || rsiHistory.length < 100) return 45; // Default support
+
+        // Dynamic Floor: Average of the lowest RSIs over distinct windows?
+        // Let's use user's logic: "Average_RSI_Low of last 100 periods"
+        // We will approximate this by taking the average of RSI values < 50 in the last 100 bars
+        let sum = 0, count = 0;
+        const slice = rsiHistory.slice(-100);
+        for (let r of slice) {
+            if (r < 50) { sum += r; count++; }
+        }
+        return count > 0 ? (sum / count) : 45;
+    }
+
     // --- STEP C: EXECUTION ENGINE ---
     processTick(candles, currentPrice) {
         if (!this.isRunning) return;
@@ -357,9 +429,12 @@ class TradingBot {
         const prevCandle = candles[candles.length - 2];
         const candleTime = lastCandle.time;
 
-        // Calc Indicators
-        const emaArray = Indicators.ema(candles, 50);
-        const rsiArray = Indicators.rsi(candles, 14);
+        // 0. Update HTF Context
+        this.updateHigherTimeframes(lastCandle);
+
+        // Calc Indicators (SMOOTHED for Micro-Account)
+        const emaArray = Indicators.ema(candles, 200); // Was 50
+        const rsiArray = Indicators.rsi(candles, 21);  // Was 14
         const atrArray = Indicators.atr(candles, 14);
         const adxArray = Indicators.adx(candles, 14);
         const macdData = Indicators.macd(candles);
@@ -373,14 +448,31 @@ class TradingBot {
         const adx = adxArray[adxArray.length - 1];
         const macdHist = macdData.histogram[macdData.histogram.length - 1];
 
-        // 1. Detect Regime
+        // 1. Detect Regime & HTF Bias
         const regime = this.detectRegime(adx, atr, atrArray);
+
+        // 2. Auto-Tune Parameters (Moved Up for Telemetry)
+        const params = this.getDynamicParams(regime);
+
+        // HTF Waterfall Logic
+        let htfBias = 'NEUTRAL';
+        let h4Ema = null;
+        if (this.candlesH4.length > 50) {
+            const h4EmaArray = Indicators.ema(this.candlesH4, 50);
+            h4Ema = h4EmaArray[h4EmaArray.length - 1];
+            if (currentPrice > h4Ema) htfBias = 'BULLISH';
+            else if (currentPrice < h4Ema) htfBias = 'BEARISH';
+        }
+
         this.updateStatusDisplay(ema, rsi, macdHist, regime, adx);
 
-        // Heartbeat
+        // Heartbeat & Telemetry
         const now = Date.now();
+        // Broadcast Deep State every tick (or throttled)
+        this.broadcastDeepState(regime, htfBias, params, { currentPrice, rsi, macdHist, adx, ema });
+
         if (!this.lastLogTime || now - this.lastLogTime > 5000) {
-            this.log(`[LIVE] Price:${currentPrice} RSI:${rsi.toFixed(1)} MACD:${macdHist.toFixed(2)} [${regime}]`, "INFO");
+            this.log(`[LIVE] $${currentPrice} [${regime}] HTF:${htfBias}`, "INFO");
             this.lastLogTime = now;
         }
 
@@ -390,23 +482,61 @@ class TradingBot {
             return;
         }
 
-        // 2. Auto-Tune Parameters
-        const params = this.getDynamicParams(regime);
+        // (Auto-Tune was here, moved up)
 
-        // 3. Signal Logic (LONG ONLY for simplicity in this version, symmetric for SHORT)
+        // Dynamic Rolling RSI Threshold
+
+        // Dynamic Rolling RSI Threshold
+        const rsiBaseline = this.getRollingRsiBaseline(candles);
+        const dynamicEntryRsi = rsiBaseline + 5; // User Rule: < AvgLow + 5
+
+        // Volatility Guard (Consecutive Losses -> Tighten requirements or Boost SL?)
+        // User asked to Boost SL Multiplier from 2.0 to 3.0
+        if (this.volatilityGuardActive) {
+            params.slMult = 3.0; // Survival Mode
+        }
+
+        // 3. Signal Logic (LONG ONLY)
+        // Waterfall Filter: If HTF IS BEARISH -> BLOCK LONGS
+        if (htfBias === 'BEARISH') {
+            // this.log("Skipping Long. H4 Bias is Bearish.", "FILTER");
+            return;
+        }
+
         // Entry: Price > EMA, MACD > 0, RSI < DynamicLimit, Close > PrevHigh (Momentum)
         const isLong = (currentPrice > ema) &&
             (macdHist > 0) &&
-            (rsi < params.rsiLimit) &&
+            (rsi < dynamicEntryRsi) && // Dynamic relative threshold!
             (currentPrice > prevCandle.high); // Breakout check
 
         if (isLong) {
-            // 4. Brain Check
-            const hash = this.getMarketHash(regime, rsi);
+            // 4. Brain Check (Deep Context)
+            const hash = this.getMarketHash(regime, rsi, htfBias); // NEW HASH SIG
             const brainCheck = this.consultBrain(hash);
 
             if (!brainCheck.approved) {
-                this.log(`[VETO] Signal Valid, but Brain Rejected [${hash}] (WR: ${brainCheck.winRate.toFixed(0)}%)`, "BRAIN");
+                this.log(`[VETO] Brain Rejected [${hash}] (WR: ${brainCheck.winRate.toFixed(0)}%)`, "BRAIN");
+                return;
+            }
+
+            // 5. Fee Protection Layer (Micro-Account Safeguard)
+            // Estimate Fee: 0.12% round trip (0.06% entry + 0.06% exit + slippage)
+            // Relax fees if Trend is STRONG (ADX > 40)
+            const feeMultiplier = (adx > 40) ? 1.5 : 2.5;
+
+            const feeRate = 0.0012;
+            const balanceUsable = this.paperBalance * 0.95; // 95% of equity
+            // Approx Qty based on price (ignoring leverage limits for sim)
+            const approxQty = balanceUsable / currentPrice;
+            const estimatedFee = (approxQty * currentPrice) * feeRate;
+
+            // Projected Profit (ATR * TP Multiplier)
+            const tpDist = params.tpMult * atr;
+            const projectedProfit = tpDist * approxQty;
+
+            // Rule: Profit must be > 2.5x Fees
+            if (projectedProfit < (estimatedFee * feeMultiplier)) {
+                this.log(`[FILTER] Skipped. ROI too small. (ADX:${adx.toFixed(0)})`, "ADAPT");
                 return;
             }
 
@@ -427,8 +557,8 @@ class TradingBot {
         }
 
         // Exit Checks
-        if (currentPrice <= p.sl) this.closePosition(currentPrice, 'SL', rsi, candleTime);
-        else if (currentPrice >= p.tp) this.closePosition(currentPrice, 'TP', rsi, candleTime);
+        if (currentPrice <= p.sl) this.closePosition(currentPrice, 'SL', rsi, candleTime, p.hash);
+        else if (currentPrice >= p.tp) this.closePosition(currentPrice, 'TP', rsi, candleTime, p.hash);
     }
 
     openPosition(type, price, atr, rsi, regime, params, hash, candleTime) {
@@ -438,9 +568,9 @@ class TradingBot {
         const tp = price + tpDist;
 
         // Size
-        const riskPerTrade = this.paperBalance * 0.01 * params.riskScale; // 1% * scale
-        const riskPerShare = price - sl;
-        const qty = riskPerTrade / riskPerShare;
+        // Micro-Account Mode: Use 95% of Balance (High Efficiency)
+        const usableBalance = this.paperBalance * 0.95;
+        const qty = usableBalance / price;
 
         this.position = { type, entryPrice: price, sl, tp, qty, atr, isTrailed: false, hash, entryRsi: rsi };
         this.saveState();

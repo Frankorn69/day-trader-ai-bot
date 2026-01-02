@@ -64,7 +64,8 @@
             // Generate Strong Trend Data (ADX > 25)
             let candles = [];
             let p = 50000;
-            for (let i = 0; i < 100; i++) {
+            // Need 300 bars for EMA 200
+            for (let i = 0; i < 300; i++) {
                 p += 50;
                 candles.push({ time: i, open: p - 10, high: p + 20, low: p - 10, close: p, volume: 1000 });
             }
@@ -74,6 +75,11 @@
             log(`Calculated ADX: ${adxVal.toFixed(1)} (Target > 25)`);
 
             const bot = new TradingBot();
+            // Force EMA 200 Warmup
+            bot.processTick(candles, p); // Run once to update internals? No, just detectRegime.
+
+            // NOTE: detectRegime uses ADX/ATR, not EMA directly, but let's be safe.
+
             const regime = bot.detectRegime(adxVal, 50, 50);
 
             if (regime === 'TRENDING') log("PASS: Bot identified TRENDING regime.", 'PASS');
@@ -124,7 +130,7 @@
                         let simP = 50000;
 
                         // 1. Trend
-                        for (let i = 0; i < 120; i++) {
+                        for (let i = 0; i < 300; i++) { // Increased to 300 for EMA 200
                             simP += tSlope;
                             simCandles.push({ time: i, open: simP - 10, high: simP + 20, low: simP - 10, close: simP, volume: 1000 });
                         }

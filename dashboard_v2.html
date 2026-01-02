@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>God Mode Dashboard v2 ⚡</title>
+    <style>
+        :root {
+            --bg: #0D1117;
+            --panel: #161B22;
+            --border: #30363D;
+            --text: #C9D1D9;
+            --green: #2EA043;
+            --red: #FF7B72;
+            --gold: #D29922;
+            --blue: #58A6FF;
+            --font: 'Segoe UI', monospace;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--font);
+            padding: 20px;
+            margin: 0;
+        }
+
+        h1,
+        h2,
+        h3 {
+            margin: 0 0 10px 0;
+            font-weight: 600;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 15px;
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        /* METRICS */
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .metric-val {
+            font-weight: bold;
+        }
+
+        .tag {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .tag.bull {
+            background: rgba(46, 160, 67, 0.2);
+            color: var(--green);
+        }
+
+        .tag.bear {
+            background: rgba(255, 123, 114, 0.2);
+            color: var(--red);
+        }
+
+        .tag.neutral {
+            background: rgba(210, 153, 34, 0.2);
+            color: var(--gold);
+        }
+
+        /* TABLE */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            color: var(--blue);
+        }
+
+        tr:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        button.del-btn {
+            background: rgba(255, 123, 114, 0.1);
+            color: var(--red);
+            border: 1px solid var(--red);
+            cursor: pointer;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+        }
+
+        button.del-btn:hover {
+            background: var(--red);
+            color: #fff;
+        }
+
+        /* HEADER */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #666;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        .status.active {
+            background: var(--green);
+            box-shadow: 0 0 8px var(--green);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header">
+        <div>
+            <h1>⚡ God Mode Dashboard v2</h1>
+            <div style="font-size: 12px; color: #888;">Connected to: LocalStorage & BroadcastChannel</div>
+        </div>
+        <div>
+            <span class="status-dot" id="conn-status"></span>
+            <span id="conn-text">Waiting for Bot...</span>
+        </div>
+    </div>
+
+    <div class="grid">
+        <!-- SECTION B: THE EYES -->
+        <div class="panel">
+            <h2>👁️ Multi-Timeframe Vision</h2>
+            <div class="metric-row">
+                <span>HTF Bias (4H)</span>
+                <span id="htf-bias" class="tag neutral">WAITING</span>
+            </div>
+            <div class="metric-row">
+                <span>Micro Regime (1m)</span>
+                <span id="regime" class="tag neutral">WAITING</span>
+            </div>
+            <div class="metric-row">
+                <span>Trend Strength (ADX)</span>
+                <span id="adx-val" class="metric-val">--</span>
+            </div>
+            <div class="metric-row">
+                <span>Last Price</span>
+                <span id="price-val" class="metric-val" style="color: var(--blue)">--</span>
+            </div>
+        </div>
+
+        <!-- SECTION C: DYNAMIC PARAMS -->
+        <div class="panel">
+            <h2>⚙️ Dynamic Parameters</h2>
+            <div class="metric-row">
+                <span>RSI Limit</span>
+                <span id="rsi-limit" class="metric-val">--</span>
+            </div>
+            <div class="metric-row">
+                <span>Take Profit Mult</span>
+                <span id="tp-mult" class="metric-val">--</span>
+            </div>
+            <div class="metric-row">
+                <span>Stop Loss Mult</span>
+                <span id="sl-mult" class="metric-val">--</span>
+            </div>
+            <div class="metric-row">
+                <span>Volatility Guard</span>
+                <span id="vol-guard" class="tag neutral">INACTIVE</span>
+            </div>
+        </div>
+
+        <!-- SECTION D: WALLET & RISK -->
+        <div class="panel">
+            <h2>💰 Wallet & Risk</h2>
+            <div style="font-size: 24px; font-weight: bold; margin: 10px 0;" id="balance">--</div>
+            <div class="metric-row">
+                <span>Total PnL</span>
+                <span id="pnl" class="metric-val">--</span>
+            </div>
+            <div class="metric-row">
+                <span>Fee Gate Status</span>
+                <span id="fee-gate" class="tag bull">ACTIVE</span>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>📡 Control</h2>
+            <p style="font-size:12px; color:#888">Open the Bot page in another tab to activate Live Telemetry.</p>
+            <button onclick="location.reload()"
+                style="background:#333; color:#fff; border:none; padding:5px 10px; cursor:pointer;">Refresh Brain
+                View</button>
+        </div>
+    </div>
+
+    <!-- SECTION A: THE CORTEX -->
+    <div class="panel full-width">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <h2>🧠 Cortex Memory (Brain)</h2>
+            <button onclick="clearBrain()"
+                style="background:var(--red); color:#fff; border:none; padding:5px 10px; cursor:pointer; font-weight:bold;">☢️
+                WIPE ALL MEMORY</button>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Context Hash</th>
+                    <th>Wins</th>
+                    <th>Losses</th>
+                    <th>Win Rate</th>
+                    <th>Samples</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="brain-table">
+                <!-- Rows injected here -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        // --- BRAIN MANAGER ---
+        const BRAIN_KEY = 'bot_brain_v1';
+
+        function loadBrainTable() {
+            const data = localStorage.getItem(BRAIN_KEY);
+            const brain = data ? JSON.parse(data) : {};
+            const tbody = document.getElementById('brain-table');
+            tbody.innerHTML = '';
+
+            if (Object.keys(brain).length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px;">Brain is Empty. (No Memories Learned yet)</td></tr>';
+                return;
+            }
+
+            for (const [hash, stats] of Object.entries(brain)) {
+                const total = stats.wins + stats.losses;
+                const wr = total > 0 ? ((stats.wins / total) * 100).toFixed(0) + '%' : '0%';
+
+                // Highlight Poison
+                const isToxic = total > 5 && (stats.wins / total) < 0.4;
+                const rowStyle = isToxic ? 'background: rgba(255,123,114,0.1)' : '';
+
+                const tr = document.createElement('tr');
+                tr.style = rowStyle;
+                tr.innerHTML = `
+                    <td style="font-family:monospace; color: ${isToxic ? 'var(--red)' : '#fff'}">${hash}</td>
+                    <td>${stats.wins}</td>
+                    <td>${stats.losses}</td>
+                    <td style="font-weight:bold; color: ${isToxic ? 'var(--red)' : 'var(--green)'}">${wr}</td>
+                    <td>${total}</td>
+                    <td><button class="del-btn" onclick="deleteMemory('${hash}')">DELETE</button></td>
+                `;
+                tbody.appendChild(tr);
+            }
+        }
+
+        function deleteMemory(hash) {
+            const data = localStorage.getItem(BRAIN_KEY);
+            if (!data) return;
+            const brain = JSON.parse(data);
+            delete brain[hash];
+            localStorage.setItem(BRAIN_KEY, JSON.stringify(brain));
+            loadBrainTable(); // Refresh
+        }
+
+        function clearBrain() {
+            if (confirm("Are you sure? This deletes ALL learned patterns.")) {
+                localStorage.removeItem(BRAIN_KEY);
+                loadBrainTable();
+            }
+        }
+
+        // --- TELEMETRY ---
+        const channel = new BroadcastChannel('bot_telemetry');
+        const statusDot = document.getElementById('conn-status');
+        const statusText = document.getElementById('conn-text');
+
+        channel.onmessage = (ev) => {
+            const msg = ev.data;
+            if (msg.type === 'HEARTBEAT') {
+                updateDashboard(msg.data);
+            }
+        };
+
+        function updateDashboard(data) {
+            // Conenction
+            statusDot.className = 'status-dot active';
+            statusText.innerText = "Live Connected";
+
+            // Section B: Eyes
+            const htfEl = document.getElementById('htf-bias');
+            htfEl.innerText = data.htfBias;
+            htfEl.className = `tag ${data.htfBias === 'BULLISH' ? 'bull' : (data.htfBias === 'BEARISH' ? 'bear' : 'neutral')}`;
+
+            const regEl = document.getElementById('regime');
+            regEl.innerText = data.regime;
+            regEl.className = `tag ${data.regime === 'TRENDING' ? 'bull' : (data.regime === 'VOLATILE' ? 'bear' : 'neutral')}`;
+
+            document.getElementById('adx-val').innerText = data.indicators.adx.toFixed(1);
+            document.getElementById('price-val').innerText = '$' + data.indicators.currentPrice.toFixed(2);
+
+            // Section C: Params
+            document.getElementById('rsi-limit').innerText = `< ${data.params.rsiLimit.toFixed(1)}`;
+            document.getElementById('tp-mult').innerText = data.params.tpMult + 'x';
+
+            const slMult = document.getElementById('sl-mult');
+            slMult.innerText = data.params.slMult + 'x';
+            if (data.params.slMult > 2.0) {
+                slMult.style.color = 'var(--red)';
+                document.getElementById('vol-guard').className = 'tag bear';
+                document.getElementById('vol-guard').innerText = 'ACTIVE';
+            } else {
+                slMult.style.color = 'var(--text)';
+                document.getElementById('vol-guard').className = 'tag neutral';
+                document.getElementById('vol-guard').innerText = 'INACTIVE';
+            }
+
+            // Section D: Wallet
+            document.getElementById('balance').innerText = `$${data.wallet.balance.toFixed(2)}`;
+            const pnlEl = document.getElementById('pnl');
+            pnlEl.innerText = `$${data.wallet.pnl.toFixed(2)}`;
+            pnlEl.style.color = data.wallet.pnl >= 0 ? 'var(--green)' : 'var(--red)';
+        }
+
+        // Initial Load
+        loadBrainTable();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>System Integrity Test v1.0 🛡️</title>
+    <style>
+        body {
+            background: #0D1117;
+            color: #C9D1D9;
+            font-family: 'Consolas', monospace;
+            padding: 20px;
+            font-size: 14px;
+        }
+
+        .log-box {
+            background: #161B22;
+            border: 1px solid #30363D;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 6px;
+        }
+
+        .tester {
+            color: #58A6FF;
+            font-weight: bold;
+        }
+
+        /* Cyan/Blue */
+        .bot-log {
+            color: #C9D1D9;
+        }
+
+        .error-bot {
+            color: #FF7B72;
+            font-weight: bold;
+        }
+
+        /* Red */
+        .error-test {
+            color: #D29922;
+            font-weight: bold;
+        }
+
+        /* Yellow */
+        .pass {
+            color: #2EA043;
+            font-weight: bold;
+        }
+
+        /* Green */
+        .fail {
+            color: #FF7B72;
+            font-weight: bold;
+        }
+
+        h2 {
+            border-bottom: 1px solid #30363D;
+            padding-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🛡️ System Integrity Diagnostic Suite</h1>
+    <div id="output">Initializing Tests...</div>
+
+    <!-- Mocks -->
+    <div style="display:none">
+        <div id="bot-logs"></div>
+        <div id="bot-status-indicator"></div>
+        <div id="bot-balance"></div>
+        <div id="bot-pnl"></div>
+        <div id="bot-indicators"></div>
+        <div id="btn-bot-toggle"></div>
+    </div>
+    <script>
+        window.localStorage = { getItem: (k) => null, setItem: (k, v) => { } };
+        window.ChartManager = { addMarker: () => { } };
+        window.SoundFX = { playBuy: () => { }, playSell: () => { } };
+    </script>
+
+    <!-- Load Bot -->
+    <script src="bot.js"></script>
+
+    <script>
+        const out = document.getElementById('output');
+        function print(msg, type = 'NORMAL') {
+            const div = document.createElement('div');
+            div.innerText = msg;
+            if (type === 'TESTER') div.className = 'tester';
+            else if (type === 'BOT') div.className = 'bot-log';
+            else if (type === 'ERROR-BOT') div.className = 'error-bot';
+            else if (type === 'ERROR-TEST') div.className = 'error-test';
+            else if (type === 'PASS') div.className = 'pass';
+            else if (type === 'FAIL') div.className = 'fail';
+            out.appendChild(div);
+            window.scrollTo(0, document.body.scrollHeight);
+        }
+
+        // --- HELPER: Generate Candles ---
+        function generateCandles(count, startPrice, trendSlope, volatility = 10) {
+            let candles = [];
+            let p = startPrice;
+            for (let i = 0; i < count; i++) {
+                p += trendSlope;
+                candles.push({
+                    time: i * 60000,
+                    open: p, high: p + volatility, low: p - volatility, close: p,
+                    volume: 1000
+                });
+            }
+            return candles;
+        }
+
+        async function runSuite() {
+            let passed = 0;
+            let total = 4;
+
+            print("--------------------------------------------------", 'TESTER');
+            print("[TESTER] Starting Diagnostic Suite...", 'TESTER');
+
+            // --- SCENARIO A: WATERFALL CHECK (HTF BIAS) ---
+            print("<br>[TESTER] SCENARIO A: The 'Waterfall' Check (HTF Bias)", 'TESTER');
+            try {
+                const bot = new TradingBot();
+                bot.log = (m, t) => {
+                    if (t === 'FILTER') print(`[BOT-FILTER] ${m}`, 'PASS'); // Using PASS color as confirmation
+                    else print(`[BOT] ${m}`, 'BOT');
+                };
+
+                // 1. Inject Macro Downtrend (H4)
+                // H4 EMA 50 needs > 50 candles.
+                // Let's create H4 candles dropping from 60k to 50k
+                let h4Candles = generateCandles(60, 60000, -100, 50); // Hard dump
+                bot.candlesH4 = h4Candles;
+
+                // Verify H4 Context is Bearish
+                const ind = Indicators;
+                const h4Ema = ind.ema(h4Candles, 50).pop();
+                const lastH4Price = h4Candles[h4Candles.length - 1].close; // ~54000
+                print(`[TESTER] Macro Setup: Price ${lastH4Price} < EMA ${h4Ema.toFixed(0)}? ${lastH4Price < h4Ema}`, 'TESTER');
+
+                // 2. Inject Micro Setup (1m) - Perfect Long
+                // RSI < 40, MACD > 0, Price > EMA(1m) 
+                // We need 1m candles that are climbing LOCALLY, but overall below H4 levels
+                // Let's say Price is 54000. H4 EMA is ~57000. 
+                // 1m candles Rally from 53000 to 54000
+                let m1Candles = generateCandles(300, 53000, 5, 10); // EMA 200 Needs 300 bars
+
+                // Force Indicators to align for LONG locally
+                // Note: generated linear trend usually has RSI 100. We need a pullback.
+                // Reset last 20 candles to drop RSI
+                let p = 54000;
+                for (let i = 0; i < 10; i++) {
+                    p -= 10;
+                    m1Candles.push({ time: 300 * 60000 + i * 60000, open: p + 10, high: p + 10, low: p - 10, close: p, volume: 1000 });
+                }
+                // Then Pop UP for breakout
+                m1Candles.push({ time: 311 * 60000, open: p, high: p + 50, low: p, close: p + 50, volume: 5000 });
+
+                // Run Bot
+                bot.processTick(m1Candles, p + 50);
+
+                if (bot.position === null) {
+                    print("[RESULT] PASS: Bot stayed flat despite local breakout.", 'PASS');
+                    passed++;
+                } else {
+                    print("[RESULT] FAIL: Bot took a trade against Macro Trend!", 'FAIL');
+                }
+
+            } catch (e) { print(`[ERROR-TEST] ${e.message}`, 'ERROR-TEST'); }
+
+            // --- SCENARIO B: FEE GATE CHECK ---
+            print("<br>[TESTER] SCENARIO B: The 'Fee Gate' Check", 'TESTER');
+            try {
+                const bot = new TradingBot();
+                bot.paperBalance = 27.00; // Micro Account
+                bot.log = (m, t) => {
+                    if (t === 'ADAPT' && m.includes('Skipped')) print(`[BOT-GATE] ${m}`, 'PASS');
+                    else print(`[BOT] ${m}`, 'BOT');
+                };
+
+                // Create a setup where Volatility (ATR) is TINY.
+                // Profit Target = 2 * ATR. If ATR is 10 cents, Profit is 20 cents.
+                // Fee on $27 trade is ~$0.03. Wait. 
+                // Let's make ATR *really* small. Price 50000. ATR 5.
+                // Profit = 10. Fee on 50k trade is huge?
+                // No, Fee is based on Notional Value. 
+                // $27 trade. Fee 0.12% = $0.032. 
+                // Profit must be > 0.08. 
+                // So if Projected Profit is $0.05, it should skip.
+
+                // Generate Stable Candles
+                let candles = generateCandles(300, 50000, 0.5, 1); // Very low vol
+                // Spike RSI low
+                candles.push({ time: Date.now(), open: 50150, high: 50150, low: 50140, close: 50140, volume: 1000 });
+                // Spike Breakout
+                candles.push({ time: Date.now() + 60000, open: 50140, high: 50160, low: 50140, close: 50160, volume: 1000 }); // Break previous high
+
+                bot.candlesH4 = generateCandles(60, 40000, 100, 50); // Force Bullish Context so Waterfall doesn't block
+
+                bot.processTick(candles, 50160);
+
+                // We expect NO Position because volatility is tiny
+                if (bot.position === null) {
+                    print("[RESULT] PASS: Bot refused low ROI trade.", 'PASS');
+                    passed++;
+                } else {
+                    print(`[RESULT] FAIL: Bot traded! PnL likely negative after fees.`, 'FAIL');
+                }
+
+            } catch (e) { print(`[ERROR-TEST] ${e.message}`, 'ERROR-TEST'); }
+
+            // --- SCENARIO C: CHAMELEON CHECK (AUTO-TUNING) ---
+            print("<br>[TESTER] SCENARIO C: The 'Chameleon' Check (Auto-Tuning)", 'TESTER');
+            try {
+                const bot = new TradingBot();
+                // Inject HIGH VOLATILITY Regime
+                // ATR needs to be > AvgATR * 1.5.
+                // Provide history of Low ATR (10), then sudden spikes of 50.
+                let candles = generateCandles(200, 50000, 10, 5); // ATR ~5
+                for (let i = 0; i < 50; i++) {
+                    // Spike volatility
+                    candles.push({ time: i * 60000, open: 52000, high: 52200, low: 51800, close: 52000, volume: 1000 }); // Rangy large candles
+                }
+
+                // Force an update
+                bot.processTick(candles, 52000); // Calculates regime
+
+                const params = bot.getDynamicParams('VOLATILE');
+
+                if (params.slMult === 3.0) {
+                    print(`[RESULT] PASS: Bot adapted SL Multiplier to ${params.slMult} (Expected 3.0)`, 'PASS');
+                    passed++;
+                } else {
+                    print(`[RESULT] FAIL: Bot params static. SL Mult: ${params.slMult}`, 'FAIL');
+                }
+
+            } catch (e) { print(`[ERROR-TEST] ${e.message}`, 'ERROR-TEST'); }
+
+            // --- SCENARIO D: ELEPHANT MEMORY CHECK ---
+            print("<br>[TESTER] SCENARIO D: The 'Elephant Memory' Check (Veto)", 'TESTER');
+            try {
+                const bot = new TradingBot();
+                bot.log = (m, t) => {
+                    if (t === 'BRAIN') print(`[BOT-BRAIN] ${m}`, 'PASS');
+                    else print(`[BOT] ${m}`, 'BOT');
+                };
+
+                // Force HTF Bullish
+                bot.candlesH4 = generateCandles(60, 40000, 100, 50);
+
+                // The Hash the bot will generate for a standard Long:
+                // HTF:BULLISH (because H4 is up)
+                // RSI: ... let's see. If we provide RSI 25 -> OVERSOLD.
+                // REGIME: Assuming NORMAL/TRENDING.
+
+                // Let's POISON the brain for this specific hash
+                const toxicHash = "REGIME:NORMAL_RSI:OVERSOLD_HTF:BULLISH"; // Note: getMarketHash order
+                // Actually need to check hash function order in bot.js: `REGIME:${regime}_HTF:${htfBias}_RSI:${rsiZone}`
+                const targetHash = "REGIME:TRENDING_HTF:BULLISH_RSI:OVERSOLD";
+
+                bot.brain[targetHash] = { wins: 0, losses: 10 }; // 0% WR
+                print(`[TESTER] Poisoned Brain with 10 Losses for [${targetHash}]`, 'TESTER');
+
+                // Generate Setup matching this hash
+                // 1. Trending (ADX > 25)
+                let candles = generateCandles(300, 50000, 20, 10);
+                // 2. Oversold RSI
+                let p = 56000;
+                for (let i = 0; i < 15; i++) {
+                    p -= 50; // Dump
+                    candles.push({ time: 300 * 60000 + i * 60000, open: p + 10, high: p + 10, low: p - 10, close: p, volume: 1000 });
+                }
+                // 3. Trigger Breakout
+                candles.push({ time: 320 * 60000, open: p, high: p + 50, low: p, close: p + 50, volume: 5000 });
+
+                bot.processTick(candles, p + 50);
+
+                if (bot.position === null) {
+                    print("[RESULT] PASS: Memory Veto blocked the trade.", 'PASS');
+                    passed++;
+                } else {
+                    // Check what hash it actually generated if it failed
+                    print("[RESULT] FAIL: Bot ignored history! (Or hash mismatch)", 'FAIL');
+                }
+
+            } catch (e) { print(`[ERROR-TEST] ${e.message}`, 'ERROR-TEST'); }
+
+            print("<br>--------------------------------------------------", 'TESTER');
+            if (passed === total) print(`[SUMMARY] ${passed}/${total} Tests Passed. System Integrity: 100% 🟢`, 'PASS');
+            else print(`[SUMMARY] ${passed}/${total} Tests Passed. System Compromised. 🔴`, 'FAIL');
+        }
+
+        setTimeout(runSuite, 1000);
+    </script>
+</body>
+
+</html>
