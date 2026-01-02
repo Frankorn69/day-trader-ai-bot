@@ -99,9 +99,9 @@
             }
 
 
-            log("<br>--- TEST 3: FULL EXECUTION (AUTO-SOLVER v3 - CLEAN INSTANCE) ---");
+            log("<br>--- TEST 3: FULL EXECUTION (AUTO-SOLVER v3.1 - FINAL) ---");
 
-            // SOLVER v3: Bull Flag Logic
+            // SOLVER v3.1: Explicitly Checks Breakout Condition + Strong Breakout
             let bestCandles = null;
             let bestP = 0;
             let found = false;
@@ -133,8 +133,8 @@
                             simP += pSlope;
                             simCandles.push({ time: 200 + i, open: simP + 10, high: simP + 10, low: simP - 10, close: simP, volume: 1000 });
                         }
-                        // 3. Trigger
-                        simP += (tSlope * 3);
+                        // 3. Trigger BREAKOUT (Massive Pop to clear wicks - 5x Trend)
+                        simP += (tSlope * 5);
                         simCandles.push({ time: 300, open: simP - 20, high: simP, low: simP - 20, close: simP, volume: 5000 });
 
                         // Metrics
@@ -143,18 +143,19 @@
                         const mObj = ind.macd(simCandles);
                         const m = mObj.histogram[mObj.histogram.length - 1];
                         const e = ind.ema(simCandles, 50).pop();
+                        const prevHigh = simCandles[simCandles.length - 2].high;
 
                         // Track Best Miss
                         if (Math.abs(r - 55) < Math.abs(closestMiss.rsi - 55)) {
                             closestMiss = { rsi: r, macd: m, t: tSlope, pS: pSlope, pL: pLen };
                         }
 
-                        // CRITERIA
-                        if (r < 64 && r > 40 && m > 0.001 && simP > e) {
+                        // CRITERIA: RSI < 64, MACD > 0, Price > EMA, AND Price > PrevHigh
+                        if (r < 64 && r > 40 && m > 0.001 && simP > e && simP > prevHigh) {
                             bestCandles = simCandles;
                             bestP = simP;
                             found = true;
-                            log(`SOLVER SUCCESS: Trend=${tSlope}, FlagSlope=${pSlope}, Len=${pLen} -> RSI:${r.toFixed(1)} MACD:${m.toFixed(2)}`, 'pass');
+                            log(`SOLVER SUCCESS: Trend=${tSlope}, Flag=${pSlope}, Len=${pLen} -> RSI:${r.toFixed(1)} MACD:${m.toFixed(2)} Breakout:${simP > prevHigh}`, 'pass');
                             break;
                         }
                     }
@@ -165,16 +166,17 @@
                 log(`SOLVER FAILED after ${attempts} attempts.`, 'FAIL');
                 log("Bot refuses to trade.", 'fail');
             } else {
-                // Instantiate a FRESH bot to ensure no state pollution from previous tests
+                // Instantiate a FRESH bot 
                 const bot3 = new TradingBot();
-
                 bot3.isRunning = true;
 
-                // Hook Logs for this specific instance
+                // --- CRITICAL FIX: FORCE CLEAR STATE (Ignore LocalStorage) ---
+                // Prevents "Phantom Positions" from old browser sessions crashing the test
+                bot3.position = null;
+
                 bot3.log = (m, t) => log(`[BOT-${t}] ${m}`, 'INFO');
 
                 let tradeOpened = false;
-                // Spy on openPosition
                 const originalOpen = bot3.openPosition.bind(bot3);
                 bot3.openPosition = (...args) => {
                     tradeOpened = true;
