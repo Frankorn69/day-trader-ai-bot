@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>God AI: Backtest Laboratory v9 🧪 (Scroll Chart + Fixes)</title>
+    <style>
+        body {
+            background: #0D1117;
+            color: #C9D1D9;
+            font-family: 'Segoe UI', monospace;
+            padding: 20px;
+            font-size: 13px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 250px 1fr;
+            gap: 20px;
+        }
+
+        .panel {
+            background: #161B22;
+            border: 1px solid #30363D;
+            padding: 15px;
+            border-radius: 6px;
+        }
+
+        h1 {
+            margin-top: 0;
+            color: #58A6FF;
+            font-size: 20px;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .val {
+            font-weight: bold;
+        }
+
+        .win {
+            color: #2EA043;
+        }
+
+        .loss {
+            color: #FF7B72;
+        }
+
+        #logs {
+            height: 400px;
+            overflow-y: scroll;
+            background: #000;
+            padding: 10px;
+            border: 1px solid #333;
+            font-family: 'Consolas', monospace;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            background: #238636;
+            color: white;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        button:hover {
+            background: #2EA043;
+        }
+
+        input[type="checkbox"] {
+            transform: scale(1.2);
+        }
+
+        label {
+            cursor: pointer;
+        }
+
+        /* Scrollable Chart Container */
+        .chart-wrapper {
+            width: 100%;
+            overflow-x: auto;
+            background: #000;
+            border: 1px solid #333;
+            margin-bottom: 15px;
+        }
+
+        #chart-container {
+            height: 300px;
+            /* Width will be set dynamically */
+        }
+    </style>
+
+    <!-- 1. MOCKING MUST BE FIRST TO CATCH BOT.JS -->
+    <script>
+        window.memStore = new Map();
+        window.localStorage = {
+            getItem: (k) => window.memStore.get(k) || null,
+            setItem: (k, v) => window.memStore.set(k, v),
+            removeItem: (k) => window.memStore.delete(k)
+        };
+        window.SoundFX = { playBuy: () => { }, playSell: () => { } };
+        window.ChartManager = { addMarker: () => { } };
+    </script>
+</head>
+
+<body>
+    <div class="grid">
+        <div class="panel">
+            <h1>🧪 Lab Control</h1>
+            <div style="margin-bottom: 10px; color: #8b949e;">
+                Data: <span id="data-status">Loading...</span><br>
+                Candles: <span id="data-count">0</span>
+            </div>
+
+            <div class="metric">Balance: <span id="bal-val" class="val">--</span></div>
+            <div class="metric">PnL: <span id="pnl-val" class="val">--</span></div>
+            <div class="metric">Trades: <span id="trades-val" class="val">--</span></div>
+            <div class="metric">WinRate: <span id="wr-val" class="val">--</span></div>
+
+            <hr style="border-color:#333">
+
+            <button id="btn-run" onclick="runBacktest()">▶ RUN SIMULATION ($500)</button>
+            <div style="margin-top:15px; font-size:12px; color: #fff;">
+                <label style="color:#FF7B72; font-weight:bold;">1. BYPASS SAFEGUARDS:</label><br>
+
+                <label><input type="checkbox" id="disable-fees"> <b>Disable Fee Gate</b></label><br>
+                <span style="color:#888; font-size:10px; display:block; margin-bottom:5px;">(Allow trades with low
+                    ROI)</span>
+
+                <label><input type="checkbox" id="disable-waterfall"> <b>Disable Bear Protection</b></label><br>
+                <span style="color:#888; font-size:10px; display:block; margin-bottom:5px;">(Allow trades in H4 Bear
+                    Market)</span>
+
+                <label><input type="checkbox" id="disable-trend"> <b>Disable Trend (EMA)</b></label><br>
+                <span style="color:#888; font-size:10px; display:block; margin-bottom:5px;">(YOLO: Buy purely on
+                    RSI)</span>
+            </div>
+
+            <hr style="border-color:#333; margin: 15px 0;">
+            <h3>🏆 Pattern Leaderboard</h3>
+            <div id="pattern-list" style="font-size:11px; color:#8b949e; max-height: 200px; overflow-y: auto;">
+                Running...
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="chart-wrapper">
+                <div id="chart-container">
+                    <canvas id="chart"></canvas>
+                </div>
+            </div>
+            <h3>Execution Log</h3>
+            <div id="logs"></div>
+        </div>
+    </div>
+
+    <!-- Hidden Mocks -->
+    <div style="display:none">
+        <div id="bot-logs"></div>
+    </div>
+
+    <script src="backtest_data.js"></script>
+    <script>
+        // Cache Busting Load AFTER Mock
+        const script = document.createElement('script');
+        script.src = "bot.js?v=" + Date.now();
+        document.body.appendChild(script);
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        // --- 2. DATA LOAD ---
+        let microData = [];
+        let macroData = [];
+
+        function init() {
+            if (window.BACKTEST_DATA) {
+                microData = window.BACKTEST_DATA.micro.map(parsedCandle);
+                macroData = window.BACKTEST_DATA.macro.map(parsedCandle);
+                document.getElementById('data-status').innerText = "Ready";
+                document.getElementById('data-count').innerText = microData.length;
+            } else {
+                document.getElementById('data-status').innerText = "Missing Data File";
+            }
+        }
+
+        function parsedCandle(arr) {
+            if (arr.value) arr = arr.value; // Handle PowerShell JSON serialization quirk
+            return {
+                time: parseInt(arr[0]),
+                open: parseFloat(arr[1]),
+                high: parseFloat(arr[2]),
+                low: parseFloat(arr[3]),
+                close: parseFloat(arr[4]),
+                volume: parseFloat(arr[5])
+            };
+        }
+
+        function log(msg, color = '#8b949e') {
+            const div = document.createElement('div');
+            div.innerText = msg;
+            div.style.color = color;
+            document.getElementById('logs').prepend(div);
+        }
+
+        // --- 3. THE ENGINE ---
+        async function runBacktest() {
+            log("--- STARTING NEW SIMULATION ($500) ---", "#fff");
+
+            // Clean Slate
+            window.memStore.clear();
+
+            const bot = new TradingBot();
+            bot.paperBalance = 500.00; // Updated Budget
+            bot.candlesH4 = [];
+
+            // CONFIG OVERRIDES
+            if (document.getElementById('disable-fees').checked) {
+                bot.skipFeeSafeGuard = true;
+                log("⚠️ DEV MODE: Fee Safeguard Bypass ACTIVE.", "orange");
+            } else { bot.skipFeeSafeGuard = false; }
+
+            if (document.getElementById('disable-waterfall').checked) {
+                bot.skipHtfWaterfall = true;
+                log("⚠️ DEV MODE: Bear Protection Bypass ACTIVE.", "orange");
+            } else { bot.skipHtfWaterfall = false; }
+
+            if (document.getElementById('disable-trend').checked) {
+                bot.skipTrendFilter = true;
+                log("⚠️ DEV MODE: Trend Filter (EMA) Bypass ACTIVE.", "orange");
+            } else { bot.skipTrendFilter = false; }
+
+            // Spy on Bot Logging - LOG EVERYTHING
+            // Spy on Bot Logging - LOG EVERYTHING & COUNT TRADES
+            let tradeCountMock = 0;
+            let winsMock = 0;
+
+            bot.log = (msg, type) => {
+                let color = '#888';
+                if (type === 'BUY') color = '#2EA043';
+                else if (type === 'SELL') color = '#FF7B72';
+                else if (type === 'ADAPT') color = '#d29922';
+                else if (type === 'BRAIN') color = '#a371f7';
+                else if (type === 'TRACE') color = '#58A6FF'; // Debug Blue
+                else if (type === 'ERROR') color = '#f85149';
+
+                // Fail-safe Trade Counting via Logs
+                if (msg.includes('CLOSE') && (type === 'BUY' || type === 'SELL')) {
+                    tradeCountMock++;
+                    if (type === 'BUY') winsMock++; // 'BUY' color signals WIN in bot.js logic (confusing, but consistent)
+                }
+
+                // Keep UI clean, only log critical events to UI, full to console
+                if (type === 'TRACE') {
+                    // console.log(msg); // Optional: keep console clean too
+                } else {
+                    log(`[${type}] ${msg}`, color);
+                }
+            };
+
+            // SIMULATION LOOP
+            const equity = [];
+            const labels = [];
+            const startIdx = 200;
+            const limit = microData.length;
+            log(`[INFO] Micro Data Length: ${limit}`);
+            if (limit < 200) log("[ERROR] Not enough data to Start!");
+
+            log("[INFO] Starting Loop (May take a moment)...");
+
+            // Chunked execution to prevent UI freeze
+            const chunkSize = 20000;
+
+            for (let i = startIdx; i < limit; i++) {
+                const candle = microData[i];
+                // Optimization: Don't slice full 200 every tick if not needed, but bot needs it.
+                // Using a sliding window buffer would be faster, but slice is safe.
+                const view = microData.slice(i - 200, i + 1);
+
+                try {
+                    bot.processTick(view, candle.close);
+                } catch (e) {
+                    log(`[FATAL] Crash at tick ${i}: ${e.message}`, 'red');
+                    console.error(e);
+                    break;
+                }
+
+                if (i % 60 === 0) {
+                    equity.push(bot.paperBalance);
+                    labels.push(new Date(candle.time).toLocaleDateString());
+                }
+
+                if (i % chunkSize === 0) {
+                    document.getElementById('data-status').innerText = `Simulating... ${(i / limit * 100).toFixed(0)}%`;
+                    await new Promise(r => setTimeout(r, 0));
+                }
+            }
+
+            // Final Stats (Corrected Source)
+            const pnl = bot.paperBalance - 135.00;
+            const wins = winsMock;
+            const totalTrades = tradeCountMock;
+            const wr = totalTrades > 0 ? (wins / totalTrades) * 100 : 0;
+
+            document.getElementById('bal-val').innerText = '$' + bot.paperBalance.toFixed(2);
+            document.getElementById('pnl-val').innerText = '$' + pnl.toFixed(2);
+            document.getElementById('trades-val').innerText = totalTrades;
+            document.getElementById('wr-val').innerText = wr.toFixed(1) + '%';
+            document.getElementById('data-status').innerText = "Done";
+
+            if (totalTrades === 0) log("⚠️ STILL 0 TRADES? Check Logs for [TRACE] or [FILTER].", "red");
+
+            renderChart(labels, equity);
+            renderLeaderboard(bot.patternBrain);
+        }
+
+        function renderLeaderboard(brain) {
+            const list = document.getElementById('pattern-list');
+            if (!brain || Object.keys(brain).length === 0) {
+                list.innerHTML = "No patterns detected yet.";
+                return;
+            }
+
+            let html = '<table style="width:100%; border-collapse: collapse;">';
+            html += '<tr><th style="text-align:left">Pattern</th><th>W/L</th><th>PnL</th><th>Rank</th></tr>';
+
+            const sorted = Object.keys(brain).sort((a, b) => brain[b].pnl - brain[a].pnl);
+
+            for (let k of sorted) {
+                const s = brain[k];
+                const wr = Math.round((s.wins / (s.wins + s.losses)) * 100) || 0;
+                let rank = 'B';
+                if (s.pnl > 10 && wr > 60) rank = 'S';
+                else if (s.pnl > 0 && wr > 50) rank = 'A';
+                else if (s.pnl < 0 && (s.wins + s.losses) >= 5) rank = 'F';
+
+                let color = '#8b949e';
+                let status = rank;
+
+                if (rank === 'S') { color = '#A371F7'; status = 'S (ELITE)'; }
+                else if (rank === 'A') { color = '#2EA043'; status = 'A (PRO)'; }
+                else if (rank === 'F') { color = '#FF7B72'; status = '⛔ BANNED'; } // Clear Visual
+                else if (rank === 'B') { status = 'B (MID)'; }
+
+                html += `<tr style="color:${color}; border-bottom:1px solid #333">
+                    <td style="padding:4px">${k.replace('BULLISH_', '').replace('BEARISH_', '')}</td>
+                    <td>${s.wins}/${s.losses}</td>
+                    <td>$${s.pnl.toFixed(2)}</td>
+                    <td><b>${status}</b></td>
+                </tr>`;
+            }
+            html += '</table>';
+            list.innerHTML = html;
+        }
+
+        function renderChart(lbls, data) {
+            const container = document.getElementById('chart-container');
+            // Dynamic Width: 2px per data point, min 100%
+            const newWidth = Math.max(container.parentElement.clientWidth, lbls.length * 2);
+            container.style.width = newWidth + 'px';
+
+            const ctx = document.getElementById('chart').getContext('2d');
+            if (window.myChart) window.myChart.destroy();
+
+            // Reset canvas height/width
+            const canvas = document.getElementById('chart');
+            canvas.width = newWidth;
+            canvas.height = 300;
+
+            window.myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: lbls,
+                    datasets: [{
+                        label: 'Equity Curve',
+                        data: data,
+                        borderColor: '#58A6FF',
+                        backgroundColor: 'rgba(88, 166, 255, 0.1)',
+                        borderWidth: 1,
+                        pointRadius: 0,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    scales: {
+                        x: { display: false },
+                        y: {
+                            grid: { color: '#333' }
+                        }
+                    }
+                }
+            });
+        }
+
+        setTimeout(init, 500);
+    </script>
+</body>
+
+</html>
